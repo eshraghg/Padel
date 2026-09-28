@@ -10,6 +10,7 @@ import {
 } from './state.js';
 import { calculateMatchStatistics, generateTacticalInsights } from './analytics.js';
 import { playPointSound, toggleSound, isSoundEnabled } from './audio.js';
+import { exportSessionToHtml } from './exportHtml.js';
 import confetti from 'canvas-confetti';
 
 // Current active match state
@@ -79,6 +80,8 @@ const elements = {
   summaryMatrixTable: document.getElementById('summary-matrix-table'),
   summaryFinalScores: document.getElementById('summary-final-scores'),
   summaryWinnerBadge: document.getElementById('summary-winner-badge'),
+  btnExportHtmlSummary: document.getElementById('btn-export-html-summary'),
+  btnExportHtmlSettings: document.getElementById('btn-export-html-settings'),
   btnExportCsv: document.getElementById('btn-export-csv'),
   btnPrintSummary: document.getElementById('btn-print-summary'),
 
@@ -274,6 +277,18 @@ function setupEventListeners() {
 
   // Export CSV
   elements.btnExportCsv.addEventListener('click', exportToCsv);
+
+  // Export HTML Report (Single file named after players and date)
+  if (elements.btnExportHtmlSummary) {
+    elements.btnExportHtmlSummary.addEventListener('click', () => {
+      exportSessionToHtml(currentMatch);
+    });
+  }
+  if (elements.btnExportHtmlSettings) {
+    elements.btnExportHtmlSettings.addEventListener('click', () => {
+      exportSessionToHtml(currentMatch);
+    });
+  }
 
   // Print Summary
   elements.btnPrintSummary.addEventListener('click', () => {
