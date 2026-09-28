@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Padel Game-Score Analysis | Bolouri Tennis & Padel Academy</title>
+  
+  <!-- PWA & Mobile Meta -->
+  <meta name="description" content="Padel game-score analysis point-by-point tracking, end-of-set summary, and player analytics for Android & web.">
+  <meta name="theme-color" content="#0a0e17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  
+  <script type="module" crossorigin src="/assets/index-VWxwrhUD.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-PJA2r3Rx.css">
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="header-top">
+      <div class="brand-wrapper">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="m4.93 4.93 4.24 4.24"></path>
+            <path d="m14.83 9.17 4.24-4.24"></path>
+            <path d="m14.83 14.83 4.24 4.24"></path>
+            <path d="m9.17 14.83-4.24 4.24"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title">PadelScore</div>
+          <div class="academy-sub">Bolouri Tennis & Padel Academy</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-sound-toggle" class="btn-icon" title="Toggle Sound Feedback">🔊</button>
+        <button id="btn-demo-load" class="btn-icon" title="Load Professional Demo Match">⚡</button>
+        <button id="btn-pwa-install" class="btn-icon" title="Install Android App" style="display:none;">📲</button>
+      </div>
+    </div>
+
+    <!-- Live Interactive Scoreboard -->
+    <div class="scoreboard-card" id="scoreboard">
+      <div class="match-meta-bar">
+        <span class="badge-court" id="live-court-text">Court 1</span>
+        <span id="live-match-timer">00:00</span>
+        <span class="badge-rule" id="live-rule-text">Punto de Oro</span>
+      </div>
+
+      <div class="scoreboard-grid">
+        <div class="teams-scores-container">
+          <!-- Team 1 Row -->
+          <div class="team-row t1" id="scoreboard-t1-row">
+            <div class="team-info-box">
+              <span class="server-dot" id="t1-server-dot"></span>
+              <span class="team-tag t1">T1</span>
+              <div class="team-names-block">
+                <span class="team-title" id="sb-t1-name">Team 1</span>
+                <span class="team-players-sub" id="sb-t1-players">L: Player 1 • R: Player 2</span>
+              </div>
+            </div>
+            <div class="scores-block">
+              <div class="sets-history" id="sb-t1-sets"></div>
+              <div class="current-games" id="sb-t1-games">0</div>
+              <div class="points-display" id="sb-t1-points">0</div>
+            </div>
+          </div>
+
+          <!-- Team 2 Row -->
+          <div class="team-row t2" id="scoreboard-t2-row">
+            <div class="team-info-box">
+              <span class="server-dot hidden" id="t2-server-dot"></span>
+              <span class="team-tag t2">T2</span>
+              <div class="team-names-block">
+                <span class="team-title" id="sb-t2-name">Team 2</span>
+                <span class="team-players-sub" id="sb-t2-players">L: Player 3 • R: Player 4</span>
+              </div>
+            </div>
+            <div class="scores-block">
+              <div class="sets-history" id="sb-t2-sets"></div>
+              <div class="current-games" id="sb-t2-games">0</div>
+              <div class="points-display" id="sb-t2-points">0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- TAB 1: RECORD (Courtside Fast Entry) -->
+  <main id="tab-record" class="tab-content active">
+    <div class="record-grid">
+      
+      <!-- Step 1: Winning Team -->
+      <section class="entry-section">
+        <div class="section-label">
+          <span>1. Point Winner</span>
+          <span class="step-indicator">Team</span>
+        </div>
+        <div class="team-select-row">
+          <button type="button" class="team-card-btn t1 selected" id="btn-team-t1" data-team="T1">
+            <span class="team-name-lg" id="rec-t1-name">Team 1</span>
+            <span class="team-sub-sm" id="rec-t1-sub">L & R Players</span>
+          </button>
+          <button type="button" class="team-card-btn t2" id="btn-team-t2" data-team="T2">
+            <span class="team-name-lg" id="rec-t2-name">Team 2</span>
+            <span class="team-sub-sm" id="rec-t2-sub">L & R Players</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 2: Won By (Winner vs Error) -->
+      <section class="entry-section">
+        <div class="section-label">
+          <span>2. Point Concluded By</span>
+          <span class="step-indicator">Won By</span>
+        </div>
+        <div class="won-by-row">
+          <button type="button" class="won-by-btn winner-btn selected" id="btn-won-w" data-wonby="W">
+            <span>✨</span>
+            <span>Winner (W)</span>
+          </button>
+          <button type="button" class="won-by-btn error-btn" id="btn-won-e" data-wonby="E">
+            <span>⚠️</span>
+            <span>Opponent Error (E)</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 3: Player Selection (Left vs Right player with name) -->
+      <section class="entry-section">
+        <div class="section-label">
+          <span id="player-select-heading">3. Player (Decisive Shot)</span>
+          <span class="step-indicator">L / R</span>
+        </div>
+        <div class="player-select-row">
+          <button type="button" class="player-card-btn selected" id="btn-player-l" data-player="L">
+            <span class="pos-badge">L</span>
+            <span class="player-name-text" id="rec-player-l-name">Left Player</span>
+          </button>
+          <button type="button" class="player-card-btn" id="btn-player-r" data-player="R">
+            <span class="pos-badge">R</span>
+            <span class="player-name-text" id="rec-player-r-name">Right Player</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Step 4: Shot Choice (13 choices including Ret. Serve) -->
+      <section class="entry-section">
+        <div class="section-label">
+          <span>4. Shot Choice (PDF Sheet + Ret. Serve)</span>
+          <span class="step-indicator">13 Shots</span>
+        </div>
+
+        <!-- Filter category pills -->
+        <div class="shot-category-pills" id="shot-category-filter"></div>
+
+        <!-- Shot grid buttons -->
+        <div class="shot-grid" id="shot-btn-grid"></div>
+
+        <!-- Notes input & tags -->
+        <div class="note-input-row">
+          <input type="text" id="point-note-input" class="note-input" placeholder="Point note (e.g. net cord, out wide, break pt)...">
+        </div>
+        <div class="quick-note-pills">
+          <button type="button" class="quick-note-pill" data-note="Net cord">Net cord</button>
+          <button type="button" class="quick-note-pill" data-note="Out wide">Out wide</button>
+          <button type="button" class="quick-note-pill" data-note="Glass out">Glass out</button>
+          <button type="button" class="quick-note-pill" data-note="Break Point">Break Point</button>
+          <button type="button" class="quick-note-pill" data-note="Golden Point">Punto de Oro</button>
+          <button type="button" class="quick-note-pill" data-note="Unforced">Unforced</button>
+        </div>
+      </section>
+
+      <!-- Action Row: Undo & Log Point -->
+      <div class="action-buttons-row">
+        <button type="button" class="btn-undo" id="btn-undo-point" title="Undo previous point">
+          <span>↩️</span> Undo
+        </button>
+        <button type="button" class="btn-log-point" id="btn-log-point">
+          <span>⚡</span>
+          <span id="log-point-text">LOG POINT #1</span>
+        </button>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- TAB 2: SCORESHEET (Matching PDF Point-by-Point Sheet) -->
+  <section id="tab-sheet" class="tab-content">
+    <div class="sheet-container">
+      <div class="sheet-header-box">
+        <div class="sheet-title">
+          <span>Bolouri Tennis & Padel Academy</span>
+          <span style="font-size:0.9rem; font-weight:700; color:#10b981;">PADEL</span>
+        </div>
+        <div class="sheet-subtitle">Padel Game-Score Analysis – Point-by-Point Sheet</div>
+        
+        <div class="sheet-meta-grid">
+          <div class="sheet-meta-item"><strong>Date:</strong> <span id="sheet-meta-date">-</span></div>
+          <div class="sheet-meta-item"><strong>Court:</strong> <span id="sheet-meta-court">-</span></div>
+          <div class="sheet-meta-item"><strong>T1:</strong> <span id="sheet-meta-t1">-</span></div>
+          <div class="sheet-meta-item"><strong>T2:</strong> <span id="sheet-meta-t2">-</span></div>
+          <div class="sheet-meta-item"><strong>Format:</strong> <span id="sheet-meta-format">-</span></div>
+          <div class="sheet-meta-item"><strong>Time:</strong> <span id="sheet-meta-time">-</span></div>
+        </div>
+
+        <div style="font-size:0.7rem; color:#64748b; margin-top:6px; font-style:italic;">
+          Won by W = own winning shot • Won by E = opponent's error • L = Left player • R = Right player
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="point-table" id="point-table">
+          <thead>
+            <tr>
+              <th style="width:40px;">#</th>
+              <th>Score (T1 / T2)</th>
+              <th>Team</th>
+              <th>Won by</th>
+              <th>Player</th>
+              <th>Shot</th>
+              <th>Note</th>
+              <th style="width:30px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="point-table-body">
+            <!-- Points rendered dynamically -->
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:14px; font-size:0.7rem; color:#64748b; line-height:1.4;">
+        <strong>Shot key:</strong> Ret. Serve = Return of Serve • F.H = Forehand • B.H = Backhand • FVol = Forehand volley • BVol = Backhand volley • Band = Bandeja • Baj = Bajada • Vib = Vibora • Drop = Dropshot • Chiq. = Chiquita | Bolouri Tennis & Padel Academy
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 3: SUMMARIZE (Matching PDF Page 4 End-of-Set Summary + CSV/PDF) -->
+  <section id="tab-summary" class="tab-content">
+    <div class="summary-card">
+      <div class="summary-header-row">
+        <div>
+          <div class="summary-title">End-of-Set Summary</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Cumulative match & set matrix totals</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-secondary" id="btn-export-csv" style="font-size:0.75rem; padding:6px 10px;">📥 CSV</button>
+          <button class="btn-secondary" id="btn-print-summary" style="font-size:0.75rem; padding:6px 10px;">🖨️ Print / PDF</button>
+        </div>
+      </div>
+
+      <div class="matrix-table-wrap">
+        <table class="matrix-table" id="summary-matrix-table">
+          <!-- Rendered dynamically -->
+        </table>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; padding-top:10px; border-top:1px solid var(--border-subtle); font-size:0.85rem;">
+        <div><strong>Final Set Scores:</strong> <span id="summary-final-scores" style="color:var(--accent-gold); font-weight:700;">-</span></div>
+        <div id="summary-winner-badge"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 4: ANALYTICS (Visual Interactive Charts & Insights) -->
+  <section id="tab-analytics" class="tab-content">
+    <div class="analytics-grid">
+      
+      <!-- KPI Stats Cards -->
+      <div class="kpi-row" id="analytics-kpis">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Points</div>
+          <div class="kpi-val" id="kpi-total-points">0</div>
+          <div class="kpi-sub" id="kpi-pts-split">0 - 0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Winners (T1 / T2)</div>
+          <div class="kpi-val" id="kpi-winners-val" style="color:var(--t1-text);">0 / 0</div>
+          <div class="kpi-sub" id="kpi-we-ratio">W/E: 0.0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Return Winners</div>
+          <div class="kpi-val" id="kpi-returns-val" style="color:var(--t2-text);">0</div>
+          <div class="kpi-sub">Ret. Serve points</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Overhead Winners</div>
+          <div class="kpi-val" id="kpi-overheads-val" style="color:var(--accent-gold);">0</div>
+          <div class="kpi-sub">Smash / Band / Vib</div>
+        </div>
+      </div>
+
+      <!-- Tactical Insights -->
+      <div class="insights-card">
+        <div style="font-weight:800; font-size:1rem; display:flex; align-items:center; gap:8px;">
+          <span>🧠</span>
+          <span>Tactical & Coaching Takeaways</span>
+        </div>
+        <div class="insights-list" id="analytics-insights-list"></div>
+      </div>
+
+      <!-- Player Comparison (T1 L vs R and T2 L vs R) -->
+      <div class="chart-card">
+        <div class="chart-title">
+          <span>👥 Player Performance (Left vs Right)</span>
+        </div>
+        <div class="player-comp-grid" id="player-comparison-grid"></div>
+      </div>
+
+      <!-- Shot Breakdown Bar Chart (SVG) -->
+      <div class="chart-card">
+        <div class="chart-title">
+          <span>📊 Winners by Shot Type (T1 vs T2)</span>
+        </div>
+        <div class="chart-svg-wrap" id="chart-shot-bars"></div>
+      </div>
+
+      <!-- Match Momentum Timeline Chart (SVG) -->
+      <div class="chart-card">
+        <div class="chart-title">
+          <span>📈 Match Momentum Flow</span>
+          <span style="font-size:0.7rem; color:var(--text-muted);">Lead differential</span>
+        </div>
+        <div class="chart-svg-wrap" id="chart-momentum"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- TAB 5: MATCH INFO & SETTINGS -->
+  <section id="tab-settings" class="tab-content">
+    <div class="summary-card">
+      <div class="summary-title" style="margin-bottom:14px;">Match Configuration & Teams</div>
+
+      <form id="match-settings-form" class="settings-form">
+        <div class="form-group">
+          <label class="form-label">Match Title / Tournament</label>
+          <input type="text" id="setting-title" class="form-input" placeholder="e.g. Bolouri Academy Tournament">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Court</label>
+            <input type="text" id="setting-court" class="form-input" placeholder="Court 1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input type="date" id="setting-date" class="form-input">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Match Format</label>
+            <select id="setting-format" class="form-select">
+              <option value="Best of 3">Best of 3 Sets</option>
+              <option value="Best of 1">1 Full Set</option>
+              <option value="Best of 5">Best of 5 Sets</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Deuce / 40-40 Rule</label>
+            <select id="setting-rule" class="form-select">
+              <option value="goldenPoint">Punto de Oro (Golden Point)</option>
+              <option value="advantage">Traditional Advantage (Ad)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Initial Server</label>
+          <select id="setting-server" class="form-select">
+            <option value="T1">Team 1 Serves First</option>
+            <option value="T2">Team 2 Serves First</option>
+          </select>
+        </div>
+
+        <!-- Team 1 Setup (T1 with Left & Right Player) -->
+        <div class="team-edit-card t1">
+          <div style="font-weight:800; font-size:0.9rem; color:var(--t1-text); margin-bottom:8px;">Team 1 Setup</div>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label class="form-label">Team 1 Name</label>
+            <input type="text" id="setting-t1-name" class="form-input" placeholder="Team 1">
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div class="form-group">
+              <label class="form-label">Left Player (L)</label>
+              <input type="text" id="setting-t1-left" class="form-input" placeholder="Player 1 (L)">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Right Player (R)</label>
+              <input type="text" id="setting-t1-right" class="form-input" placeholder="Player 2 (R)">
+            </div>
+          </div>
+        </div>
+
+        <!-- Team 2 Setup (T2 with Left & Right Player) -->
+        <div class="team-edit-card t2">
+          <div style="font-weight:800; font-size:0.9rem; color:var(--t2-text); margin-bottom:8px;">Team 2 Setup</div>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label class="form-label">Team 2 Name</label>
+            <input type="text" id="setting-t2-name" class="form-input" placeholder="Team 2">
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div class="form-group">
+              <label class="form-label">Left Player (L)</label>
+              <input type="text" id="setting-t2-left" class="form-input" placeholder="Player 3 (L)">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Right Player (R)</label>
+              <input type="text" id="setting-t2-right" class="form-input" placeholder="Player 4 (R)">
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+          <button type="submit" class="btn-primary" style="flex:1;">💾 Save Match Settings</button>
+        </div>
+      </form>
+
+      <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:10px;">
+        <div style="font-weight:700; font-size:0.85rem; color:var(--text-secondary);">Match Management</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" id="btn-new-match">✨ New Match</button>
+          <button type="button" class="btn-secondary" id="btn-load-demo">⚡ Load Demo Match</button>
+          <button type="button" class="btn-secondary" id="btn-export-json">📤 Export JSON</button>
+          <button type="button" class="btn-secondary" id="btn-import-json">📥 Import JSON</button>
+          <input type="file" id="json-file-input" style="display:none;" accept=".json">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom Navigation Bar (Android Thumb Ergonomics) -->
+  <nav class="bottom-nav">
+    <button type="button" class="nav-item active" data-tab="tab-record">
+      <span class="nav-icon">🎾</span>
+      <span class="nav-label">Record</span>
+    </button>
+    <button type="button" class="nav-item" data-tab="tab-sheet">
+      <span class="nav-icon">📋</span>
+      <span class="nav-label">Sheet</span>
+    </button>
+    <button type="button" class="nav-item" data-tab="tab-summary">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Summary</span>
+    </button>
+    <button type="button" class="nav-item" data-tab="tab-analytics">
+      <span class="nav-icon">📈</span>
+      <span class="nav-label">Analytics</span>
+    </button>
+    <button type="button" class="nav-item" data-tab="tab-settings">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">Setup</span>
+    </button>
+  </nav>
+
+  <!-- EDIT POINT MODAL (Scoresheet row editing) -->
+  <div class="modal-overlay" id="edit-point-modal">
+    <div class="modal-box">
+      <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span id="edit-modal-title">✏️ Edit Point</span>
+        <button type="button" class="btn-icon" id="btn-close-edit-modal" style="width:30px; height:30px; font-size:0.9rem;">✕</button>
+      </div>
+
+      <form id="edit-point-form" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <input type="hidden" id="edit-point-idx" value="">
+
+        <!-- Winning Team -->
+        <div class="form-group">
+          <label class="form-label">Point Winner (Team)</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button type="button" class="team-card-btn t1" id="edit-team-t1" style="padding:10px;">
+              <span class="team-name-lg" id="edit-t1-name-lbl" style="font-size:0.85rem;">Team 1</span>
+            </button>
+            <button type="button" class="team-card-btn t2" id="edit-team-t2" style="padding:10px;">
+              <span class="team-name-lg" id="edit-t2-name-lbl" style="font-size:0.85rem;">Team 2</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Won By -->
+        <div class="form-group">
+          <label class="form-label">Point Concluded By</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button type="button" class="won-by-btn winner-btn" id="edit-won-w" style="padding:10px;">
+              <span>✨</span> Winner (W)
+            </button>
+            <button type="button" class="won-by-btn error-btn" id="edit-won-e" style="padding:10px;">
+              <span>⚠️</span> Error (E)
+            </button>
+          </div>
+        </div>
+
+        <!-- Player -->
+        <div class="form-group">
+          <label class="form-label" id="edit-player-heading">Player (L / R)</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button type="button" class="player-card-btn" id="edit-player-l" style="padding:8px 10px;">
+              <span class="pos-badge">L</span>
+              <span class="player-name-text" id="edit-player-l-lbl" style="font-size:0.8rem;">Left Player</span>
+            </button>
+            <button type="button" class="player-card-btn" id="edit-player-r" style="padding:8px 10px;">
+              <span class="pos-badge">R</span>
+              <span class="player-name-text" id="edit-player-r-lbl" style="font-size:0.8rem;">Right Player</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Shot Selection -->
+        <div class="form-group">
+          <label class="form-label">Shot Choice</label>
+          <select id="edit-shot-select" class="form-select">
+            <!-- Populated dynamically with all 13 shots -->
+          </select>
+        </div>
+
+        <!-- Note -->
+        <div class="form-group">
+          <label class="form-label">Note</label>
+          <input type="text" id="edit-note-input" class="form-input" placeholder="e.g. net cord, out wide, break pt...">
+        </div>
+
+        <!-- Actions -->
+        <div class="modal-actions" style="margin-top:14px;">
+          <button type="button" class="btn-secondary" id="btn-cancel-edit">Cancel</button>
+          <button type="submit" class="btn-primary" id="btn-save-edit">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PWA Service Worker Registration & App Logic -->
+</body>
+</html>

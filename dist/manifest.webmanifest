@@ -1,0 +1,18 @@
+{
+  "name": "PadelScore - Match Tracker & Analysis",
+  "short_name": "PadelScore",
+  "description": "Live point-by-point padel match tracking, end-of-set summary, and player analytics.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0f19",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
