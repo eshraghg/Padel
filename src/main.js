@@ -4,6 +4,8 @@ import {
   createDefaultMatch,
   createDemoMatch,
   computeMatchScore,
+  getServerDetails,
+  getMatchGamesBreakdown,
   loadCurrentMatch,
   saveCurrentMatch,
   archiveCurrentMatch
@@ -15,6 +17,14 @@ import confetti from 'canvas-confetti';
 
 // Current active match state
 let currentMatch = loadCurrentMatch();
+
+// Active Scope / Filter State
+let currentFilter = {
+  mode: 'all', // 'all', 'game', 'period'
+  selectedGame: null, // gameNumber e.g. 1, 2
+  fromMilestoneId: 'start',
+  toMilestoneId: null
+};
 
 // Pending point selection
 let pendingPoint = {
@@ -33,6 +43,7 @@ const elements = {
   liveCourt: document.getElementById('live-court-text'),
   liveRule: document.getElementById('live-rule-text'),
   liveTimer: document.getElementById('live-match-timer'),
+  liveServerBadge: document.getElementById('live-server-badge'),
   sbT1Name: document.getElementById('sb-t1-name'),
   sbT1Players: document.getElementById('sb-t1-players'),
   sbT1Sets: document.getElementById('sb-t1-sets'),
@@ -63,6 +74,9 @@ const elements = {
   shotCatFilter: document.getElementById('shot-category-filter'),
   shotGrid: document.getElementById('shot-btn-grid'),
   pointNoteInput: document.getElementById('point-note-input'),
+  autosaveBar: document.getElementById('autosave-bar'),
+  autosaveStatusText: document.getElementById('autosave-status-text'),
+  btnQuickJson: document.getElementById('btn-quick-json'),
   btnUndoPoint: document.getElementById('btn-undo-point'),
   btnLogPoint: document.getElementById('btn-log-point'),
   logPointText: document.getElementById('log-point-text'),
@@ -104,7 +118,10 @@ const elements = {
   settingDate: document.getElementById('setting-date'),
   settingFormat: document.getElementById('setting-format'),
   settingRule: document.getElementById('setting-rule'),
-  settingServer: document.getElementById('setting-server'),
+  settingServerTeam: document.getElementById('setting-server-team'),
+  settingServerPlayer: document.getElementById('setting-server-player'),
+  settingServerT1Player: document.getElementById('setting-server-t1-player'),
+  settingServerT2Player: document.getElementById('setting-server-t2-player'),
   settingT1Name: document.getElementById('setting-t1-name'),
   settingT1Left: document.getElementById('setting-t1-left'),
   settingT1Right: document.getElementById('setting-t1-right'),
@@ -160,17 +177,332 @@ let editingPoint = {
 // INITIALIZATION
 // ========================================================
 function initApp() {
-  // If match has 0 points and user hasn't modified, load demo to let them experience all features immediately
-  if (!currentMatch.points || currentMatch.points.length === 0) {
-    // Keep clean match or prompt
-  }
-
   setupEventListeners();
+  setupFilterEventListeners();
   renderShotCategories();
   renderShotButtons();
   updateSoundButton();
   updateUI();
   setupPwa();
+
+  const matchDate = currentMatch.date || new Date().toISOString().split('T')[0];
+  updateAutosaveBarStatus(`padel_match_${matchDate}.json`, false);
+}
+
+// ========================================================
+// FILTER & SCOPE LOGIC (Game Dropdown & Period Range)
+// ========================================================
+function getActiveScopeData() {
+  const breakdown = getMatchGamesBreakdown(currentMatch);
+  const allPoints = currentMatch.points || [];
+
+  if (allPoints.length === 0) {
+    return {
+      points: [],
+      breakdown,
+      filterContext: { mode: 'all', label: 'Full Match' }
+    };
+  }
+
+  // 1. All match
+  if (currentFilter.mode === 'all') {
+    return {
+      points: allPoints,
+      breakdown,
+      filterContext: { mode: 'all', label: 'Entire Match' }
+    };
+  }
+
+  // 2. By Game (Feature 1: Select and view games)
+  if (currentFilter.mode === 'game') {
+    let targetGame = breakdown.games.find(g => g.gameNumber === currentFilter.selectedGame);
+    if (!targetGame && breakdown.games.length > 0) {
+      targetGame = breakdown.games[0];
+      currentFilter.selectedGame = targetGame.gameNumber;
+    }
+
+    if (targetGame) {
+      return {
+        points: targetGame.points,
+        breakdown,
+        filterContext: {
+          mode: 'game',
+          gameNumber: targetGame.gameNumber,
+          game: targetGame,
+          label: `Game ${targetGame.gameNumber} (${targetGame.scoreAfter})`
+        }
+      };
+    }
+  }
+
+  // 3. By Period / Score (Feature 2: Filter specific period, e.g. start to 4-3)
+  if (currentFilter.mode === 'period') {
+    const milestones = breakdown.scoreMilestones;
+    let fromMs = milestones.find(m => m.id === currentFilter.fromMilestoneId);
+    if (!fromMs) fromMs = milestones[0]; // 'start'
+
+    let toMs = milestones.find(m => m.id === currentFilter.toMilestoneId);
+    if (!toMs) toMs = milestones[milestones.length - 1]; // latest milestone
+
+    let startPtIdx = fromMs.pointIndex; // 0-based slice start
+    let endPtIdx = toMs.pointIndex;     // slice end
+
+    if (startPtIdx > endPtIdx) {
+      const temp = startPtIdx;
+      startPtIdx = endPtIdx;
+      endPtIdx = temp;
+    }
+
+    const sliced = allPoints.slice(startPtIdx, endPtIdx);
+    const label = `${fromMs.label.split('(')[0].trim()} ➔ ${toMs.label.split('(')[0].trim()}`;
+
+    return {
+      points: sliced,
+      breakdown,
+      filterContext: {
+        mode: 'period',
+        fromMilestone: fromMs,
+        toMilestone: toMs,
+        label,
+        startPtIdx,
+        endPtIdx
+      }
+    };
+  }
+
+  return {
+    points: allPoints,
+    breakdown,
+    filterContext: { mode: 'all', label: 'Entire Match' }
+  };
+}
+
+function renderAllFilterPanels() {
+  const { points, breakdown, filterContext } = getActiveScopeData();
+  const filterPanels = document.querySelectorAll('.filter-panel-card');
+
+  filterPanels.forEach(panel => {
+    // Mode buttons
+    panel.querySelectorAll('.filter-mode-btn').forEach(btn => {
+      const mode = btn.getAttribute('data-mode');
+      btn.classList.toggle('active', mode === currentFilter.mode);
+    });
+
+    // Boxes visibility
+    const gameBox = panel.querySelector('.filter-game-box');
+    const periodBox = panel.querySelector('.filter-period-box');
+    if (gameBox) gameBox.style.display = currentFilter.mode === 'game' ? 'flex' : 'none';
+    if (periodBox) periodBox.style.display = currentFilter.mode === 'period' ? 'flex' : 'none';
+
+    // Reset button & Banner
+    const resetBtn = panel.querySelector('.btn-reset-scope');
+    const banner = panel.querySelector('.active-scope-banner');
+    const statusLbl = panel.querySelector('.filter-status-lbl');
+    const bannerMsg = panel.querySelector('.active-banner-msg');
+    const bannerPts = panel.querySelector('.active-banner-pts');
+
+    if (currentFilter.mode === 'all') {
+      if (resetBtn) resetBtn.style.display = 'none';
+      if (banner) banner.style.display = 'none';
+      if (statusLbl) statusLbl.textContent = `Viewing: Entire Match (${currentMatch.points.length} points)`;
+    } else {
+      if (resetBtn) resetBtn.style.display = 'inline-block';
+      if (banner) banner.style.display = 'flex';
+      if (statusLbl) statusLbl.textContent = `Filtered: ${filterContext.label} (${points.length} pts)`;
+      if (bannerMsg) bannerMsg.textContent = `Showing: ${filterContext.label}`;
+      if (bannerPts) bannerPts.textContent = `(${points.length} points in scope)`;
+    }
+
+    // Populate Game Dropdown
+    const gameSelect = panel.querySelector('.filter-game-select');
+    if (gameSelect) {
+      gameSelect.innerHTML = '';
+      if (breakdown.games.length === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = 'No games completed yet';
+        gameSelect.appendChild(opt);
+      } else {
+        breakdown.games.forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g.gameNumber;
+          const statusText = g.inProgress ? 'In Progress' : `${g.scoreAfter}`;
+          const breakTag = g.isBreak ? ' [BREAK]' : '';
+          opt.textContent = `🎾 Game ${g.gameNumber} (${statusText}) • Server: ${g.serverName} (${g.serverTeam})${breakTag} • ${g.pointsCount} pts`;
+          gameSelect.appendChild(opt);
+        });
+        if (currentFilter.selectedGame) {
+          gameSelect.value = currentFilter.selectedGame;
+        } else if (breakdown.games.length > 0) {
+          gameSelect.value = breakdown.games[0].gameNumber;
+        }
+      }
+    }
+
+    // Populate Period From / To Selects
+    const fromSelect = panel.querySelector('.filter-period-from');
+    const toSelect = panel.querySelector('.filter-period-to');
+    if (fromSelect && toSelect) {
+      fromSelect.innerHTML = '';
+      toSelect.innerHTML = '';
+
+      breakdown.scoreMilestones.forEach(sm => {
+        const optFrom = document.createElement('option');
+        optFrom.value = sm.id;
+        optFrom.textContent = sm.label;
+        fromSelect.appendChild(optFrom);
+
+        const optTo = document.createElement('option');
+        optTo.value = sm.id;
+        optTo.textContent = sm.label;
+        toSelect.appendChild(optTo);
+      });
+
+      fromSelect.value = currentFilter.fromMilestoneId || 'start';
+      if (currentFilter.toMilestoneId) {
+        toSelect.value = currentFilter.toMilestoneId;
+      } else if (breakdown.scoreMilestones.length > 1) {
+        toSelect.value = breakdown.scoreMilestones[breakdown.scoreMilestones.length - 1].id;
+      }
+    }
+
+    // Quick Presets
+    const presetsWrap = panel.querySelector('.preset-pills-wrap');
+    if (presetsWrap) {
+      presetsWrap.innerHTML = '';
+
+      // Check if 4-3 milestone exists (User's specific requirement!)
+      const milestone43 = breakdown.scoreMilestones.find(sm => sm.scoreText === '4 - 3' || sm.label.includes('4 - 3'));
+      if (milestone43) {
+        const btn43 = document.createElement('button');
+        btn43.type = 'button';
+        btn43.className = 'preset-pill-btn';
+        btn43.textContent = '⚡ Start ➔ Score 4-3';
+        btn43.title = 'Filter from Start to when score was 4 to 3';
+        btn43.addEventListener('click', () => {
+          currentFilter.mode = 'period';
+          currentFilter.fromMilestoneId = 'start';
+          currentFilter.toMilestoneId = milestone43.id;
+          applyFilterAndRefresh();
+        });
+        presetsWrap.appendChild(btn43);
+      }
+
+      // Check for first 3 games presets
+      if (breakdown.games.length >= 2) {
+        const btnG2 = document.createElement('button');
+        btnG2.type = 'button';
+        btnG2.className = 'preset-pill-btn';
+        btnG2.textContent = '🎾 Game 2';
+        btnG2.title = 'View Game 2 data & analysis';
+        btnG2.addEventListener('click', () => {
+          currentFilter.mode = 'game';
+          currentFilter.selectedGame = 2;
+          applyFilterAndRefresh();
+        });
+        presetsWrap.appendChild(btnG2);
+      }
+
+      if (breakdown.games.length >= 1) {
+        const btnG1 = document.createElement('button');
+        btnG1.type = 'button';
+        btnG1.className = 'preset-pill-btn';
+        btnG1.textContent = '🎾 Game 1';
+        btnG1.addEventListener('click', () => {
+          currentFilter.mode = 'game';
+          currentFilter.selectedGame = 1;
+          applyFilterAndRefresh();
+        });
+        presetsWrap.appendChild(btnG1);
+      }
+
+      // Full Set 1 preset
+      const endSet1 = breakdown.scoreMilestones.find(sm => sm.games && (sm.games.T1 >= 6 || sm.games.T2 >= 6));
+      if (endSet1) {
+        const btnSet1 = document.createElement('button');
+        btnSet1.type = 'button';
+        btnSet1.className = 'preset-pill-btn';
+        btnSet1.textContent = '🏆 Set 1';
+        btnSet1.addEventListener('click', () => {
+          currentFilter.mode = 'period';
+          currentFilter.fromMilestoneId = 'start';
+          currentFilter.toMilestoneId = endSet1.id;
+          applyFilterAndRefresh();
+        });
+        presetsWrap.appendChild(btnSet1);
+      }
+    }
+  });
+}
+
+function applyFilterAndRefresh() {
+  const { points, filterContext } = getActiveScopeData();
+  renderAllFilterPanels();
+
+  const activeTab = document.querySelector('.tab-content.active');
+  if (activeTab) {
+    if (activeTab.id === 'tab-sheet') renderScoresheetTable(points, filterContext);
+    else if (activeTab.id === 'tab-summary') renderSummaryMatrix(points, filterContext);
+    else if (activeTab.id === 'tab-analytics') renderAnalyticsView(points, filterContext);
+  }
+}
+
+function setupFilterEventListeners() {
+  document.addEventListener('click', (e) => {
+    // Mode button
+    const modeBtn = e.target.closest('.filter-mode-btn');
+    if (modeBtn) {
+      const mode = modeBtn.getAttribute('data-mode');
+      currentFilter.mode = mode;
+      if (mode === 'game' && !currentFilter.selectedGame) {
+        const { breakdown } = getActiveScopeData();
+        if (breakdown.games.length > 0) currentFilter.selectedGame = breakdown.games[0].gameNumber;
+      }
+      playPointSound('click');
+      applyFilterAndRefresh();
+      return;
+    }
+
+    // Reset button
+    const resetBtn = e.target.closest('.btn-reset-scope');
+    if (resetBtn) {
+      currentFilter.mode = 'all';
+      playPointSound('click');
+      applyFilterAndRefresh();
+      return;
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    // Game select
+    if (e.target.matches('.filter-game-select')) {
+      const val = parseInt(e.target.value, 10);
+      if (!isNaN(val)) {
+        currentFilter.mode = 'game';
+        currentFilter.selectedGame = val;
+        playPointSound('click');
+        applyFilterAndRefresh();
+      }
+      return;
+    }
+
+    // Period From select
+    if (e.target.matches('.filter-period-from')) {
+      currentFilter.mode = 'period';
+      currentFilter.fromMilestoneId = e.target.value;
+      playPointSound('click');
+      applyFilterAndRefresh();
+      return;
+    }
+
+    // Period To select
+    if (e.target.matches('.filter-period-to')) {
+      currentFilter.mode = 'period';
+      currentFilter.toMilestoneId = e.target.value;
+      playPointSound('click');
+      applyFilterAndRefresh();
+      return;
+    }
+  });
 }
 
 // ========================================================
@@ -193,10 +525,12 @@ function setupEventListeners() {
 
   // Demo Load buttons
   const loadDemoAction = () => {
-    if (confirm('Load sample professional match with realistic points and analytics?')) {
+    if (confirm('Load sample professional match with 10 full games, hitting score 4-3, and full analytics?')) {
       currentMatch = createDemoMatch();
       saveCurrentMatch(currentMatch);
+      currentFilter.mode = 'all';
       updateUI();
+      autoSaveMatchJson({ silent: true });
       switchTab('tab-analytics');
     }
   };
@@ -209,7 +543,9 @@ function setupEventListeners() {
       archiveCurrentMatch(currentMatch);
       currentMatch = createDefaultMatch();
       saveCurrentMatch(currentMatch);
+      currentFilter.mode = 'all';
       updateUI();
+      autoSaveMatchJson({ silent: true });
       switchTab('tab-settings');
     }
   });
@@ -263,6 +599,13 @@ function setupEventListeners() {
     pendingPoint.note = e.target.value;
   });
 
+  // Auto-Save Bar actions
+  if (elements.btnQuickJson) {
+    elements.btnQuickJson.addEventListener('click', () => {
+      autoSaveMatchJson({ forceDownload: true });
+    });
+  }
+
   // Log Point
   elements.btnLogPoint.addEventListener('click', handleLogPoint);
 
@@ -275,19 +618,32 @@ function setupEventListeners() {
     saveSettingsFromForm();
   });
 
-  // Export CSV
+  // Real-time server label update on settings inputs
+  const settingsInputs = [
+    elements.settingT1Name, elements.settingT1Left, elements.settingT1Right,
+    elements.settingT2Name, elements.settingT2Left, elements.settingT2Right,
+    elements.settingServerTeam
+  ];
+  settingsInputs.forEach(inp => {
+    if (inp) {
+      inp.addEventListener('input', updateSettingsServerLabels);
+      inp.addEventListener('change', updateSettingsServerLabels);
+    }
+  });
+
+  // Export CSV (Scope-aware)
   elements.btnExportCsv.addEventListener('click', exportToCsv);
 
-  // Export HTML Report (Single file named after players and date)
+  // Export HTML Report (Scope-aware)
+  const exportHtmlHandler = () => {
+    const { points, filterContext } = getActiveScopeData();
+    exportSessionToHtml(currentMatch, points, filterContext);
+  };
   if (elements.btnExportHtmlSummary) {
-    elements.btnExportHtmlSummary.addEventListener('click', () => {
-      exportSessionToHtml(currentMatch);
-    });
+    elements.btnExportHtmlSummary.addEventListener('click', exportHtmlHandler);
   }
   if (elements.btnExportHtmlSettings) {
-    elements.btnExportHtmlSettings.addEventListener('click', () => {
-      exportSessionToHtml(currentMatch);
-    });
+    elements.btnExportHtmlSettings.addEventListener('click', exportHtmlHandler);
   }
 
   // Print Summary
@@ -367,10 +723,10 @@ function setupEventListeners() {
       currentMatch.points[idx].note = elements.editNoteInput.value.trim();
 
       saveCurrentMatch(currentMatch);
+      autoSaveMatchJson();
       closeEditPointModal();
       playPointSound('click');
       updateUI();
-      renderScoresheetTable();
     }
   });
 }
@@ -452,10 +808,12 @@ function switchTab(tabId) {
     tab.classList.toggle('active', tab.id === tabId);
   });
 
-  // Refresh view when switching tabs
-  if (tabId === 'tab-sheet') renderScoresheetTable();
-  if (tabId === 'tab-summary') renderSummaryMatrix();
-  if (tabId === 'tab-analytics') renderAnalyticsView();
+  const { points, filterContext } = getActiveScopeData();
+  renderAllFilterPanels();
+
+  if (tabId === 'tab-sheet') renderScoresheetTable(points, filterContext);
+  if (tabId === 'tab-summary') renderSummaryMatrix(points, filterContext);
+  if (tabId === 'tab-analytics') renderAnalyticsView(points, filterContext);
   if (tabId === 'tab-settings') populateSettingsForm();
 }
 
@@ -519,19 +877,23 @@ function renderShotButtons() {
 // ========================================================
 function updateUI() {
   const scoreState = computeMatchScore(currentMatch);
+  const { points, filterContext } = getActiveScopeData();
 
-  // 1. Update Scoreboard
+  // 1. Update Scoreboard (with active serving player resolution)
   updateScoreboard(scoreState);
 
   // 2. Update Record Pad
   updateRecordPad();
 
-  // 3. Update current tab
+  // 3. Render filter panels across Sheet, Summary, and Analytics
+  renderAllFilterPanels();
+
+  // 4. Update current tab
   const activeTab = document.querySelector('.tab-content.active');
   if (activeTab) {
-    if (activeTab.id === 'tab-sheet') renderScoresheetTable();
-    else if (activeTab.id === 'tab-summary') renderSummaryMatrix();
-    else if (activeTab.id === 'tab-analytics') renderAnalyticsView();
+    if (activeTab.id === 'tab-sheet') renderScoresheetTable(points, filterContext);
+    else if (activeTab.id === 'tab-summary') renderSummaryMatrix(points, filterContext);
+    else if (activeTab.id === 'tab-analytics') renderAnalyticsView(points, filterContext);
     else if (activeTab.id === 'tab-settings') populateSettingsForm();
   }
 }
@@ -541,15 +903,28 @@ function updateScoreboard(state) {
   elements.liveCourt.textContent = currentMatch.court || 'Court 1';
   elements.liveRule.textContent = currentMatch.scoringRule === 'advantage' ? 'Advantage (Ad)' : 'Punto de Oro';
 
+  // Live Server Badge (Feature 3)
+  if (elements.liveServerBadge) {
+    elements.liveServerBadge.textContent = `🎾 Server: ${state.currentServerName || 'Player 1'}`;
+  }
+
   // Team 1
   elements.sbT1Name.textContent = currentMatch.team1.name;
-  elements.sbT1Players.textContent = `L: ${currentMatch.team1.leftPlayer || 'Left'} • R: ${currentMatch.team1.rightPlayer || 'Right'}`;
+  const t1Serving = state.currentServerTeam === 'T1';
+  const t1ServerSide = t1Serving ? state.currentServerPlayer : null;
+  const t1LText = `L: ${currentMatch.team1.leftPlayer || 'Left'}${t1ServerSide === 'L' ? ' 🎾' : ''}`;
+  const t1RText = `R: ${currentMatch.team1.rightPlayer || 'Right'}${t1ServerSide === 'R' ? ' 🎾' : ''}`;
+  elements.sbT1Players.textContent = `${t1LText} • ${t1RText}`;
   elements.sbT1Games.textContent = state.games.T1;
   elements.sbT1Points.textContent = state.isTiebreak ? state.tiebreakPoints.T1 : state.gameScore.T1;
 
   // Team 2
   elements.sbT2Name.textContent = currentMatch.team2.name;
-  elements.sbT2Players.textContent = `L: ${currentMatch.team2.leftPlayer || 'Left'} • R: ${currentMatch.team2.rightPlayer || 'Right'}`;
+  const t2Serving = state.currentServerTeam === 'T2';
+  const t2ServerSide = t2Serving ? state.currentServerPlayer : null;
+  const t2LText = `L: ${currentMatch.team2.leftPlayer || 'Left'}${t2ServerSide === 'L' ? ' 🎾' : ''}`;
+  const t2RText = `R: ${currentMatch.team2.rightPlayer || 'Right'}${t2ServerSide === 'R' ? ' 🎾' : ''}`;
+  elements.sbT2Players.textContent = `${t2LText} • ${t2RText}`;
   elements.sbT2Games.textContent = state.games.T2;
   elements.sbT2Points.textContent = state.isTiebreak ? state.tiebreakPoints.T2 : state.gameScore.T2;
 
@@ -592,15 +967,10 @@ function updateRecordPad() {
   elements.btnWonE.classList.toggle('selected', pendingPoint.wonBy === 'E');
 
   // Player Selection (Step 3)
-  // CRITICAL RULE FROM PDF:
-  // "Won by W = own winning shot • Won by E = opponent's error • L = Left player • R = Right player"
   let targetTeam = pendingPoint.team === 'T1' ? t1 : t2;
-  let errorMode = false;
 
   if (pendingPoint.wonBy === 'E') {
-    // If won by opponent error, the error was committed by the OTHER team!
     targetTeam = pendingPoint.team === 'T1' ? t2 : t1;
-    errorMode = true;
     elements.playerHeading.textContent = `3. Error Made By (${targetTeam.name})`;
   } else {
     elements.playerHeading.textContent = `3. Winner Hit By (${targetTeam.name})`;
@@ -615,6 +985,75 @@ function updateRecordPad() {
   // Next Point Counter on Log button
   const nextPtIndex = (currentMatch.points?.length || 0) + 1;
   elements.logPointText.textContent = `LOG POINT #${nextPtIndex}`;
+}
+
+// ========================================================
+// ========================================================
+// AUTOMATIC JSON BACKUP & FILE SAVING (Date-Named)
+// ========================================================
+async function autoSaveMatchJson(options = {}) {
+  const safeDate = String(currentMatch.date || new Date().toISOString().split('T')[0]).replace(/[/\\?%*:|"<>]/g, '-').trim();
+  const fileName = `padel_match_${safeDate}.json`;
+
+  // 1. Date-named LocalStorage backup (prevents accidental loss even if browser is closed)
+  try {
+    localStorage.setItem(`padel_backup_${safeDate}.json`, JSON.stringify(currentMatch));
+    localStorage.setItem('padel_current_match', JSON.stringify(currentMatch));
+  } catch (e) {
+    console.error('LocalStorage backup error:', e);
+  }
+
+  // 2. Automatically save file directly to disk (via local dev-server endpoint)
+  // ZERO browser file picker / browse popups!
+  let savedToDisk = false;
+  try {
+    const res = await fetch('/api/save-match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(currentMatch)
+    });
+    if (res.ok) {
+      savedToDisk = true;
+    }
+  } catch (err) {
+    // Silent fallback if server is unreachable
+  }
+
+  // 3. ONLY trigger manual file download if explicitly requested (e.g. clicked "📥 JSON" button)
+  // NEVER ask or pop up a browse dialog on Log Point!
+  if (options.forceDownload) {
+    const blob = new Blob([JSON.stringify(currentMatch, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // 4. Update status indicator with visual pulse
+  updateAutosaveBarStatus(fileName, savedToDisk);
+}
+
+function updateAutosaveBarStatus(fileName, isSavedToDisk = true) {
+  if (!elements.autosaveStatusText) return;
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0];
+  const ptsCount = currentMatch.points?.length || 0;
+
+  const modeText = isSavedToDisk ? '💾 Auto-Saved' : '💾 Auto-Saved (Local)';
+  elements.autosaveStatusText.textContent = `${modeText}: ${fileName} (Point #${ptsCount} • ${timeStr})`;
+
+  if (elements.autosaveBar) {
+    elements.autosaveBar.classList.remove('saving');
+    void elements.autosaveBar.offsetWidth; // trigger reflow
+    elements.autosaveBar.classList.add('saving');
+    setTimeout(() => {
+      if (elements.autosaveBar) elements.autosaveBar.classList.remove('saving');
+    }, 800);
+  }
 }
 
 // ========================================================
@@ -636,10 +1075,10 @@ function handleLogPoint() {
 
   currentMatch.points.push(newPoint);
   saveCurrentMatch(currentMatch);
+  autoSaveMatchJson();
 
   const newScoreState = computeMatchScore(currentMatch);
 
-  // Check if game or set or match completed
   if (newScoreState.matchFinished) {
     playPointSound('game');
     triggerConfetti();
@@ -653,7 +1092,6 @@ function handleLogPoint() {
     playPointSound(pendingPoint.wonBy === 'W' ? 'winner' : 'error');
   }
 
-  // Clear note input for next point
   elements.pointNoteInput.value = '';
   pendingPoint.note = '';
 
@@ -666,8 +1104,9 @@ function handleUndoPoint() {
     return;
   }
 
-  const removed = currentMatch.points.pop();
+  currentMatch.points.pop();
   saveCurrentMatch(currentMatch);
+  autoSaveMatchJson();
   playPointSound('click');
   updateUI();
 }
@@ -681,10 +1120,13 @@ function triggerConfetti() {
 }
 
 // ========================================================
-// SCORESHEET TABLE VIEW (Matches PDF pages 1-4)
+// SCORESHEET TABLE VIEW (Matches PDF Point-by-Point Sheet)
 // ========================================================
-function renderScoresheetTable() {
-  // Populate metadata
+function renderScoresheetTable(pointsToRender = null, filterContext = null) {
+  const scopeData = getActiveScopeData();
+  const points = pointsToRender !== null ? pointsToRender : scopeData.points;
+  const breakdown = scopeData.breakdown;
+
   elements.sheetDate.textContent = currentMatch.date || '-';
   elements.sheetCourt.textContent = currentMatch.court || '-';
   elements.sheetT1.textContent = `${currentMatch.team1.name} (L: ${currentMatch.team1.leftPlayer || 'L'}, R: ${currentMatch.team1.rightPlayer || 'R'})`;
@@ -694,23 +1136,21 @@ function renderScoresheetTable() {
 
   elements.pointTableBody.innerHTML = '';
 
-  if (!currentMatch.points || currentMatch.points.length === 0) {
+  if (!points || points.length === 0) {
     elements.pointTableBody.innerHTML = `
       <tr>
-        <td colspan="8" style="padding: 24px; color: #94a3b8; font-style: italic;">
-          No points recorded yet. Tap "Record" to log live points or load the demo match!
+        <td colspan="10" style="padding: 24px; color: #94a3b8; font-style: italic;">
+          No points recorded in this scope. Adjust the filter or log points!
         </td>
       </tr>
     `;
     return;
   }
 
-  // Replay point-by-point to show exact score at each point
-  let tempMatch = { ...currentMatch, points: [] };
-
-  currentMatch.points.forEach((pt, idx) => {
-    tempMatch.points.push(pt);
-    const scoreState = computeMatchScore(tempMatch);
+  points.forEach((pt) => {
+    const rawIdx = currentMatch.points.findIndex(p => p.id === pt.id);
+    const pointIdxNumber = rawIdx >= 0 ? rawIdx + 1 : (pt.index || pt.pointIndex || 1);
+    const annPt = breakdown.annotatedPoints.find(ap => ap.id === pt.id || ap.pointIndex === pointIdxNumber) || pt;
 
     const isT1 = pt.team === 'T1';
     const wonByText = pt.wonBy === 'W' ? 'W (Winner)' : "E (Error)";
@@ -721,13 +1161,17 @@ function renderScoresheetTable() {
     row.className = 'row-clickable';
     row.title = 'Click to edit this point';
     row.innerHTML = `
-      <td style="font-weight:700; color:#64748b;">${idx + 1}</td>
+      <td style="font-weight:700; color:#64748b;">${pointIdxNumber}</td>
+      <td style="font-weight:800; color:#38bdf8;">G${annPt.gameNumber || '-'}</td>
       <td>
         <div class="score-bubbles">
-          <span style="font-weight:700; color:#059669;">T1: ${scoreState.isTiebreak ? scoreState.tiebreakPoints.T1 : scoreState.gameScore.T1}</span>
+          <span style="font-weight:700; color:#059669;">T1: ${annPt.scoreDisplayAfter ? annPt.scoreDisplayAfter.split('-')[0] : '0'}</span>
           <span style="color:#94a3b8;">/</span>
-          <span style="font-weight:700; color:#0284c7;">T2: ${scoreState.isTiebreak ? scoreState.tiebreakPoints.T2 : scoreState.gameScore.T2}</span>
+          <span style="font-weight:700; color:#0284c7;">T2: ${annPt.scoreDisplayAfter ? annPt.scoreDisplayAfter.split('-')[1] : '0'}</span>
         </div>
+      </td>
+      <td style="font-size:0.75rem; font-weight:700; color:var(--accent-gold); white-space:nowrap;">
+        🎾 ${annPt.serverPlayer ? `${annPt.serverPlayer} (${annPt.serverTeam})` : '-'}
       </td>
       <td>
         <span class="team-badge-cell ${isT1 ? 't1' : 't2'}">${pt.team}</span>
@@ -744,35 +1188,36 @@ function renderScoresheetTable() {
       </td>
       <td>
         <div style="display:flex; gap:4px; justify-content:center; align-items:center;">
-          <button type="button" class="btn-edit-pt" data-idx="${idx}" title="Edit point">✏️</button>
-          <button type="button" class="btn-del-pt" data-idx="${idx}" title="Delete point">🗑️</button>
+          <button type="button" class="btn-edit-pt" data-real-idx="${rawIdx}" title="Edit point">✏️</button>
+          <button type="button" class="btn-del-pt" data-real-idx="${rawIdx}" title="Delete point">🗑️</button>
         </div>
       </td>
     `;
 
-    // Row click -> Edit
     row.addEventListener('click', (e) => {
       if (e.target.closest('.btn-del-pt')) return;
-      openEditPointModal(idx);
+      if (rawIdx >= 0) openEditPointModal(rawIdx);
     });
 
     const editBtn = row.querySelector('.btn-edit-pt');
-    editBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openEditPointModal(idx);
-    });
+    if (editBtn) {
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (rawIdx >= 0) openEditPointModal(rawIdx);
+      });
+    }
 
-    // Row delete event
     const delBtn = row.querySelector('.btn-del-pt');
-    delBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (confirm(`Delete point #${idx + 1}?`)) {
-        currentMatch.points.splice(idx, 1);
-        saveCurrentMatch(currentMatch);
-        updateUI();
-        renderScoresheetTable();
-      }
-    });
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (rawIdx >= 0 && confirm(`Delete point #${pointIdxNumber}?`)) {
+          currentMatch.points.splice(rawIdx, 1);
+          saveCurrentMatch(currentMatch);
+          updateUI();
+        }
+      });
+    }
 
     elements.pointTableBody.appendChild(row);
   });
@@ -781,8 +1226,12 @@ function renderScoresheetTable() {
 // ========================================================
 // SUMMARY MATRIX VIEW (Page 4 End-of-Set Summary + Ret. Serve)
 // ========================================================
-function renderSummaryMatrix() {
-  const stats = calculateMatchStatistics(currentMatch);
+function renderSummaryMatrix(pointsToRender = null, filterContext = null) {
+  const scopeData = getActiveScopeData();
+  const points = pointsToRender !== null ? pointsToRender : scopeData.points;
+  const ctx = filterContext || scopeData.filterContext;
+
+  const stats = calculateMatchStatistics(currentMatch, points);
   const scoreState = computeMatchScore(currentMatch);
   const shotIds = SHOT_TYPES.map(s => s.id);
 
@@ -885,8 +1334,10 @@ function renderSummaryMatrix() {
   bodyHtml += '</tbody>';
   elements.summaryMatrixTable.innerHTML = headerHtml + bodyHtml;
 
-  // Final set scores list
-  if (scoreState.completedSets.length > 0) {
+  // Final set scores / scope info
+  if (ctx && ctx.mode !== 'all') {
+    elements.summaryFinalScores.textContent = `${ctx.label} (${points.length} points in scope)`;
+  } else if (scoreState.completedSets.length > 0) {
     const scoresStr = scoreState.completedSets.map(cs => `${cs.t1}-${cs.t2}`).join(' , ');
     elements.summaryFinalScores.textContent = scoresStr;
   } else {
@@ -901,20 +1352,20 @@ function renderSummaryMatrix() {
   }
 }
 
-// Export Summary to CSV
+// Export Summary to CSV (Scope-aware)
 function exportToCsv() {
-  const stats = calculateMatchStatistics(currentMatch);
+  const { points, filterContext } = getActiveScopeData();
+  const stats = calculateMatchStatistics(currentMatch, points);
   const shotIds = SHOT_TYPES.map(s => s.id);
 
   let csv = 'Bolouri Tennis & Padel Academy - Game-Score Analysis Summary\n';
   csv += `Match: ${currentMatch.title || 'Padel Match'}, Date: ${currentMatch.date}, Court: ${currentMatch.court}\n`;
+  csv += `Scope: ${filterContext.label} (${points.length} points)\n`;
   csv += `Team 1: ${currentMatch.team1.name} (L: ${currentMatch.team1.leftPlayer} R: ${currentMatch.team1.rightPlayer})\n`;
   csv += `Team 2: ${currentMatch.team2.name} (L: ${currentMatch.team2.leftPlayer} R: ${currentMatch.team2.rightPlayer})\n\n`;
 
-  // Headers
   csv += ['Category', ...shotIds, 'TOTAL'].join(',') + '\n';
 
-  // Rows
   const addCsvRow = (title, vals, total) => {
     csv += [`"${title}"`, ...vals, total].join(',') + '\n';
   };
@@ -940,10 +1391,14 @@ function exportToCsv() {
 }
 
 // ========================================================
-// ANALYTICS & CHARTS VIEW
+// ANALYTICS & CHARTS VIEW (Scope-aware for Game & Period)
 // ========================================================
-function renderAnalyticsView() {
-  const stats = calculateMatchStatistics(currentMatch);
+function renderAnalyticsView(pointsToRender = null, filterContext = null) {
+  const scopeData = getActiveScopeData();
+  const points = pointsToRender !== null ? pointsToRender : scopeData.points;
+  const ctx = filterContext || scopeData.filterContext;
+
+  const stats = calculateMatchStatistics(currentMatch, points);
 
   // 1. KPIs
   elements.kpiTotalPoints.textContent = stats.totalPoints;
@@ -963,8 +1418,8 @@ function renderAnalyticsView() {
                           (stats.shotMatrix['Vib']?.t1Winners || 0) + (stats.shotMatrix['Vib']?.t2Winners || 0);
   elements.kpiOverheadsVal.textContent = overheadWinners;
 
-  // 2. Tactical Insights
-  const insights = generateTacticalInsights(stats, currentMatch);
+  // 2. Context-Aware Tactical Insights
+  const insights = generateTacticalInsights(stats, currentMatch, ctx);
   elements.insightsList.innerHTML = '';
   insights.forEach(ins => {
     const div = document.createElement('div');
@@ -997,7 +1452,6 @@ function renderPlayerComparisonCards(stats) {
     const box = document.createElement('div');
     box.className = 'player-stat-box';
 
-    // Find favorite weapon
     let topShot = '—';
     let topCount = 0;
     Object.entries(p.data.shots).forEach(([shotId, counts]) => {
@@ -1042,7 +1496,6 @@ function renderShotDistributionChart(stats) {
   const startX = 40;
   const baseY = height - 40;
 
-  // Max value for scaling
   let maxVal = 1;
   shotIds.forEach(id => {
     const t1W = stats.shotMatrix[id]?.t1Winners || 0;
@@ -1055,12 +1508,10 @@ function renderShotDistributionChart(stats) {
 
   let svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" style="overflow:visible;">`;
 
-  // Grid lines
   svg += `<line x1="30" y1="${baseY}" x2="${width - 10}" y2="${baseY}" stroke="#334155" stroke-width="1.5" />`;
   svg += `<line x1="30" y1="${baseY - (height - 80) / 2}" x2="${width - 10}" y2="${baseY - (height - 80) / 2}" stroke="#1e293b" stroke-dasharray="4" />`;
   svg += `<line x1="30" y1="30" x2="${width - 10}" y2="30" stroke="#1e293b" stroke-dasharray="4" />`;
 
-  // Bars
   shotIds.forEach((id, i) => {
     const x = startX + i * (barWidth * 2 + gap);
     const t1W = stats.shotMatrix[id]?.t1Winners || 0;
@@ -1069,7 +1520,6 @@ function renderShotDistributionChart(stats) {
     const t1H = t1W * scale;
     const t2H = t2W * scale;
 
-    // T1 Bar
     if (t1H > 0) {
       svg += `<rect x="${x}" y="${baseY - t1H}" width="${barWidth}" height="${t1H}" fill="#10b981" rx="3">
                 <title>${currentMatch.team1.name} ${id}: ${t1W}</title>
@@ -1077,7 +1527,6 @@ function renderShotDistributionChart(stats) {
       svg += `<text x="${x + barWidth / 2}" y="${baseY - t1H - 4}" fill="#10b981" font-size="9" font-weight="bold" text-anchor="middle">${t1W}</text>`;
     }
 
-    // T2 Bar
     if (t2H > 0) {
       svg += `<rect x="${x + barWidth + 2}" y="${baseY - t2H}" width="${barWidth}" height="${t2H}" fill="#06b6d4" rx="3">
                 <title>${currentMatch.team2.name} ${id}: ${t2W}</title>
@@ -1085,12 +1534,10 @@ function renderShotDistributionChart(stats) {
       svg += `<text x="${x + barWidth + 2 + barWidth / 2}" y="${baseY - t2H - 4}" fill="#06b6d4" font-size="9" font-weight="bold" text-anchor="middle">${t2W}</text>`;
     }
 
-    // Label
     const isRet = id === 'Ret. Serve';
-    svg += `<text x="${x + barWidth + 1}" y="${baseY + 16}" fill="${isRet ? '#38bdf8' : '#94a3b8'}" font-size="${isRet ? '9' : '9'}" font-weight="${isRet ? 'bold' : 'normal'}" text-anchor="middle">${id}</text>`;
+    svg += `<text x="${x + barWidth + 1}" y="${baseY + 16}" fill="${isRet ? '#38bdf8' : '#94a3b8'}" font-size="9" font-weight="${isRet ? 'bold' : 'normal'}" text-anchor="middle">${id}</text>`;
   });
 
-  // Legend
   svg += `
     <g transform="translate(40, 10)">
       <rect x="0" y="0" width="12" height="12" fill="#10b981" rx="2" />
@@ -1106,7 +1553,7 @@ function renderShotDistributionChart(stats) {
 
 function renderMomentumChart(stats) {
   if (stats.momentum.length === 0) {
-    elements.chartMomentum.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b;">No points logged yet.</div>`;
+    elements.chartMomentum.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b;">No points in this scope.</div>`;
     return;
   }
 
@@ -1138,27 +1585,21 @@ function renderMomentumChart(stats) {
 
   let svg = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">`;
 
-  // Zero Center Axis
   svg += `<line x1="${paddingX}" y1="${midY}" x2="${width - paddingX}" y2="${midY}" stroke="#334155" stroke-width="1.5" />`;
   svg += `<text x="${paddingX - 10}" y="${midY + 4}" fill="#64748b" font-size="10" text-anchor="end">0</text>`;
 
-  // Team labels
   svg += `<text x="${paddingX}" y="20" fill="#10b981" font-size="11" font-weight="bold">▲ ${currentMatch.team1.name} Lead</text>`;
   svg += `<text x="${paddingX}" y="${height - 8}" fill="#06b6d4" font-size="11" font-weight="bold">▼ ${currentMatch.team2.name} Lead</text>`;
 
-  // Shaded area
   svg += `<path d="${areaD}" fill="rgba(16, 185, 129, 0.12)" />`;
-
-  // Momentum line
   svg += `<path d="${pathD}" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />`;
 
-  // Points dots
   stats.momentum.forEach((m, idx) => {
     const x = paddingX + idx * stepX;
     const y = midY - (m.diff * scaleY);
     const dotColor = m.winner === 'T1' ? '#10b981' : '#06b6d4';
     svg += `<circle cx="${x}" cy="${y}" r="3.5" fill="${dotColor}">
-              <title>Point #${m.pointIndex}: ${m.winner} won with ${m.shot}</title>
+              <title>Point #${m.matchIndex || m.pointIndex}: ${m.winner} won with ${m.shot}</title>
             </circle>`;
   });
 
@@ -1167,7 +1608,7 @@ function renderMomentumChart(stats) {
 }
 
 // ========================================================
-// SETTINGS VIEW & FORM
+// SETTINGS VIEW & FORM (Feature 3: Serving Player Selection)
 // ========================================================
 function populateSettingsForm() {
   elements.settingTitle.value = currentMatch.title || '';
@@ -1175,7 +1616,6 @@ function populateSettingsForm() {
   elements.settingDate.value = currentMatch.date || '';
   elements.settingFormat.value = currentMatch.format || 'Best of 3';
   elements.settingRule.value = currentMatch.scoringRule || 'goldenPoint';
-  elements.settingServer.value = currentMatch.initialServer || 'T1';
 
   elements.settingT1Name.value = currentMatch.team1.name || 'Team 1';
   elements.settingT1Left.value = currentMatch.team1.leftPlayer || '';
@@ -1184,6 +1624,55 @@ function populateSettingsForm() {
   elements.settingT2Name.value = currentMatch.team2.name || 'Team 2';
   elements.settingT2Left.value = currentMatch.team2.leftPlayer || '';
   elements.settingT2Right.value = currentMatch.team2.rightPlayer || '';
+
+  if (elements.settingServerTeam) {
+    elements.settingServerTeam.value = currentMatch.initialServerTeam || currentMatch.initialServer || 'T1';
+  }
+  if (elements.settingServerPlayer) {
+    elements.settingServerPlayer.value = currentMatch.initialServerPlayer || 'L';
+  }
+  if (elements.settingServerT1Player) {
+    elements.settingServerT1Player.value = currentMatch.initialServerPlayerT1 || 'L';
+  }
+  if (elements.settingServerT2Player) {
+    elements.settingServerT2Player.value = currentMatch.initialServerPlayerT2 || 'L';
+  }
+
+  updateSettingsServerLabels();
+}
+
+function updateSettingsServerLabels() {
+  const t1Name = (elements.settingT1Name?.value || '').trim() || 'Team 1';
+  const t1L = (elements.settingT1Left?.value || '').trim() || 'Left Player (T1)';
+  const t1R = (elements.settingT1Right?.value || '').trim() || 'Right Player (T1)';
+
+  const t2Name = (elements.settingT2Name?.value || '').trim() || 'Team 2';
+  const t2L = (elements.settingT2Left?.value || '').trim() || 'Left Player (T2)';
+  const t2R = (elements.settingT2Right?.value || '').trim() || 'Right Player (T2)';
+
+  if (elements.settingServerTeam && elements.settingServerTeam.options.length >= 2) {
+    elements.settingServerTeam.options[0].textContent = `${t1Name} Serves First`;
+    elements.settingServerTeam.options[1].textContent = `${t2Name} Serves First`;
+  }
+
+  const activeServerTeam = elements.settingServerTeam ? elements.settingServerTeam.value : 'T1';
+  const activeL = activeServerTeam === 'T1' ? t1L : t2L;
+  const activeR = activeServerTeam === 'T1' ? t1R : t2R;
+
+  if (elements.settingServerPlayer && elements.settingServerPlayer.options.length >= 2) {
+    elements.settingServerPlayer.options[0].textContent = `Left Player (${activeL})`;
+    elements.settingServerPlayer.options[1].textContent = `Right Player (${activeR})`;
+  }
+
+  if (elements.settingServerT1Player && elements.settingServerT1Player.options.length >= 2) {
+    elements.settingServerT1Player.options[0].textContent = `Left Player (${t1L})`;
+    elements.settingServerT1Player.options[1].textContent = `Right Player (${t1R})`;
+  }
+
+  if (elements.settingServerT2Player && elements.settingServerT2Player.options.length >= 2) {
+    elements.settingServerT2Player.options[0].textContent = `Left Player (${t2L})`;
+    elements.settingServerT2Player.options[1].textContent = `Right Player (${t2R})`;
+  }
 }
 
 function saveSettingsFromForm() {
@@ -1192,7 +1681,6 @@ function saveSettingsFromForm() {
   currentMatch.date = elements.settingDate.value;
   currentMatch.format = elements.settingFormat.value;
   currentMatch.scoringRule = elements.settingRule.value;
-  currentMatch.initialServer = elements.settingServer.value;
 
   currentMatch.team1.name = elements.settingT1Name.value.trim() || 'Team 1';
   currentMatch.team1.leftPlayer = elements.settingT1Left.value.trim() || 'Player 1 (L)';
@@ -1202,7 +1690,20 @@ function saveSettingsFromForm() {
   currentMatch.team2.leftPlayer = elements.settingT2Left.value.trim() || 'Player 3 (L)';
   currentMatch.team2.rightPlayer = elements.settingT2Right.value.trim() || 'Player 4 (R)';
 
+  // Feature 3: Server team & player
+  const sTeam = elements.settingServerTeam ? elements.settingServerTeam.value : 'T1';
+  const sPlayer = elements.settingServerPlayer ? elements.settingServerPlayer.value : 'L';
+  const sT1Player = elements.settingServerT1Player ? elements.settingServerT1Player.value : sPlayer;
+  const sT2Player = elements.settingServerT2Player ? elements.settingServerT2Player.value : sPlayer;
+
+  currentMatch.initialServerTeam = sTeam;
+  currentMatch.initialServerPlayer = sPlayer;
+  currentMatch.initialServerPlayerT1 = sT1Player;
+  currentMatch.initialServerPlayerT2 = sT2Player;
+  currentMatch.initialServer = sTeam;
+
   saveCurrentMatch(currentMatch);
+  autoSaveMatchJson({ silent: true });
   updateUI();
   alert('Match settings updated!');
 }
@@ -1218,6 +1719,8 @@ function handleImportJson(e) {
       if (imported.team1 && imported.team2 && Array.isArray(imported.points)) {
         currentMatch = imported;
         saveCurrentMatch(currentMatch);
+        autoSaveMatchJson({ silent: true });
+        currentFilter.mode = 'all';
         updateUI();
         alert('Match successfully imported!');
         switchTab('tab-record');

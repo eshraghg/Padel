@@ -22,10 +22,11 @@ export function generateReportFilename(match) {
   return `Padel_${p1}_${p2}_vs_${p3}_${p4}_${dateStr}.html`;
 }
 
-export function exportSessionToHtml(match) {
+export function exportSessionToHtml(match, filteredPoints = null, filterContext = null) {
+  const activePoints = filteredPoints !== null ? filteredPoints : (match.points || []);
   const scoreState = computeMatchScore(match);
-  const stats = calculateMatchStatistics(match);
-  const insights = generateTacticalInsights(stats, match);
+  const stats = calculateMatchStatistics(match, activePoints);
+  const insights = generateTacticalInsights(stats, match, filterContext);
   const shotIds = SHOT_TYPES.map(s => s.id);
 
   const t1 = match.team1;
@@ -47,7 +48,7 @@ export function exportSessionToHtml(match) {
   let tempMatch = { ...match, points: [] };
   let pointsRowsHtml = '';
 
-  (match.points || []).forEach((pt, idx) => {
+  activePoints.forEach((pt, idx) => {
     tempMatch.points.push(pt);
     const stepScore = computeMatchScore(tempMatch);
     const isT1 = pt.team === 'T1';
@@ -57,7 +58,7 @@ export function exportSessionToHtml(match) {
 
     pointsRowsHtml += `
       <tr>
-        <td class="text-center font-bold">${idx + 1}</td>
+        <td class="text-center font-bold">${pt.pointIndex || (idx + 1)}</td>
         <td class="text-center score-cell">T1: ${stepScore.isTiebreak ? stepScore.tiebreakPoints.T1 : stepScore.gameScore.T1} / T2: ${stepScore.isTiebreak ? stepScore.tiebreakPoints.T2 : stepScore.gameScore.T2}</td>
         <td class="text-center"><span class="badge ${isT1 ? 'badge-t1' : 'badge-t2'}">${pt.team}</span></td>
         <td class="text-center font-bold ${wonClass}">${wonByText}</td>
@@ -68,8 +69,8 @@ export function exportSessionToHtml(match) {
     `;
   });
 
-  if (!match.points || match.points.length === 0) {
-    pointsRowsHtml = `<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No points recorded in this session.</td></tr>`;
+  if (activePoints.length === 0) {
+    pointsRowsHtml = `<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No points recorded in this scope.</td></tr>`;
   }
 
   // Build Summary Matrix Rows
@@ -307,9 +308,10 @@ export function exportSessionToHtml(match) {
         <div><strong>Date:</strong> ${match.date || '-'}</div>
         <div><strong>Court:</strong> ${match.court || '-'}</div>
         <div><strong>Format:</strong> ${match.format} • ${match.scoringRule === 'advantage' ? 'Advantage' : 'Punto de Oro'}</div>
-        <div><strong>Start / Finish:</strong> ${match.startTime || '-'} / ${match.finishTime || '-'}</div>
+        <div><strong>Initial Server:</strong> ${match.initialServerTeam === 'T2' ? match.team2.name : match.team1.name} (${match.initialServerPlayer === 'R' ? 'Right' : 'Left'})</div>
         <div><strong>Team 1:</strong> ${t1.name} (L: ${t1.leftPlayer || 'L'}, R: ${t1.rightPlayer || 'R'})</div>
         <div><strong>Team 2:</strong> ${t2.name} (L: ${t2.leftPlayer || 'L'}, R: ${t2.rightPlayer || 'R'})</div>
+        ${filterContext && filterContext.mode !== 'all' ? `<div style="grid-column: 1 / -1; background: rgba(16,185,129,0.15); padding: 8px 12px; border-radius: 6px; color: var(--t1); font-weight:700;"><strong>🎯 Analysis Scope:</strong> ${filterContext.label || (filterContext.mode === 'game' ? 'Game ' + filterContext.gameNumber : 'Filtered Period')} (${activePoints.length} points)</div>` : ''}
       </div>
     </div>
 

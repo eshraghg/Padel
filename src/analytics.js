@@ -1,8 +1,8 @@
 // Analytics & Statistical Engine for Padel Matches
 import { SHOT_TYPES } from './shotTypes.js';
 
-export function calculateMatchStatistics(match) {
-  const points = match.points || [];
+export function calculateMatchStatistics(match, pointsSubset = null) {
+  const points = pointsSubset !== null ? pointsSubset : (match.points || []);
   
   // Initialize matrix for each shot type
   const shotIds = SHOT_TYPES.map(s => s.id);
@@ -25,7 +25,6 @@ export function calculateMatchStatistics(match) {
     },
 
     // Per shot matrix (Matching PDF End-of-Set Summary + Ret. Serve)
-    // shotStats[shotId] = { t1Winners, t2Winners, t1Errors, t2Errors, total }
     shotMatrix: {},
 
     // Net vs Baseline
@@ -55,7 +54,6 @@ export function calculateMatchStatistics(match) {
 
   points.forEach((pt, idx) => {
     const isT1 = pt.team === 'T1';
-    const oppTeam = isT1 ? 'T2' : 'T1';
     
     if (isT1) {
       stats.t1TotalWon++;
@@ -67,6 +65,7 @@ export function calculateMatchStatistics(match) {
 
     stats.momentum.push({
       pointIndex: idx + 1,
+      matchIndex: pt.pointIndex || (idx + 1),
       diff: runningDiff,
       winner: pt.team,
       shot: pt.shot
@@ -82,7 +81,6 @@ export function calculateMatchStatistics(match) {
     const playerSide = pt.player === 'R' ? 'R' : 'L';
 
     if (isWinner) {
-      // Winner made by the winning team's player
       if (isT1) {
         stats.t1Winners++;
         stats.shotMatrix[shotId].t1Winners++;
@@ -101,8 +99,6 @@ export function calculateMatchStatistics(match) {
         }
       }
     } else {
-      // Error committed by the losing team's player
-      // In the score sheet: Won by E = opponent's error
       if (isT1) {
         // T1 won point because T2 committed an error
         stats.t2Errors++;
@@ -127,7 +123,7 @@ export function calculateMatchStatistics(match) {
     // Shot grouping stats
     const netTypes = ['FVol', 'BVol'];
     const overheadTypes = ['Smash', 'Band', 'Baj', 'Vib'];
-    const baselineTypes = ['F.H', 'B.H', 'Lob', 'Drop', 'Chiq.', 'Ret. Serve'];
+    const baselineTypes = ['F.H', 'B.H', 'Lob', 'Drop', 'Chiq.', 'Ret. Serve', 'Serve'];
 
     const scoringTeam = pt.team;
     if (netTypes.includes(shotId)) stats.netShots[scoringTeam]++;
@@ -138,15 +134,29 @@ export function calculateMatchStatistics(match) {
   return stats;
 }
 
-// Generate Coach & Tactical Insights
-export function generateTacticalInsights(stats, match) {
+// Generate Coach & Tactical Insights (Context-aware for Game / Period Filters)
+export function generateTacticalInsights(stats, match, filterContext = null) {
   const insights = [];
 
   if (stats.totalPoints === 0) {
-    return ['Start logging points to see live tactical analysis and player performance insights.'];
+    return ['No points found for the selected scope. Adjust the filter or log points to see insights.'];
   }
 
-  // 1. Dominance & Winner/Error ratio
+  // 1. Context header if filtered to Game or Period
+  if (filterContext && filterContext.mode === 'game' && filterContext.game) {
+    const g = filterContext.game;
+    const winnerName = g.winnerTeam === 'T1' ? match.team1.name : (g.winnerTeam === 'T2' ? match.team2.name : 'In Progress');
+    const outcomeText = g.winnerTeam ? `won by **${winnerName}** (${g.scoreBefore} ➔ ${g.scoreAfter})` : `currently in progress`;
+    const breakText = g.isBreak ? '⚡ **Service Break!** The receiving team broke serve here.' : (g.winnerTeam ? '🛡️ **Service Hold:** Serving team held their service game.' : '');
+    insights.push(`🎯 **Game ${g.gameNumber} Analysis:** Game was ${outcomeText} in ${g.pointsCount} points. Server: **${g.serverName}** (${g.serverTeam}). ${breakText}`);
+  } else if (filterContext && filterContext.mode === 'period') {
+    const leaderTeam = stats.t1TotalWon > stats.t2TotalWon
+      ? match.team1.name
+      : (stats.t2TotalWon > stats.t1TotalWon ? match.team2.name : 'Tied');
+    insights.push(`⏱️ **Period Analysis (${filterContext.label}):** Across these ${stats.totalPoints} points, ${leaderTeam !== 'Tied' ? `**${leaderTeam}** controlled the run` : 'both teams were dead even'} (${stats.t1TotalWon} - ${stats.t2TotalWon} points).`);
+  }
+
+  // 2. Dominance & Winner/Error ratio
   const t1Ratio = stats.t1Errors > 0 ? (stats.t1Winners / stats.t1Errors).toFixed(2) : stats.t1Winners;
   const t2Ratio = stats.t2Errors > 0 ? (stats.t2Winners / stats.t2Errors).toFixed(2) : stats.t2Winners;
 
@@ -156,7 +166,7 @@ export function generateTacticalInsights(stats, match) {
     insights.push(`🔥 **${match.team2.name}** is leading the offense with **${stats.t2Winners}** winners (W/E ratio: ${t2Ratio}).`);
   }
 
-  // 2. Best overhead weapons
+  // 3. Best overhead weapons
   const t1Overheads = (stats.shotMatrix['Smash']?.t1Winners || 0) + (stats.shotMatrix['Band']?.t1Winners || 0) + (stats.shotMatrix['Vib']?.t1Winners || 0);
   const t2Overheads = (stats.shotMatrix['Smash']?.t2Winners || 0) + (stats.shotMatrix['Band']?.t2Winners || 0) + (stats.shotMatrix['Vib']?.t2Winners || 0);
   
@@ -166,7 +176,7 @@ export function generateTacticalInsights(stats, match) {
     insights.push(`💥 **Overhead Dominance:** ${leaderTeam} produced **${count}** winners from Smashes, Bandejas & Viboras.`);
   }
 
-  // 3. Return of Serve efficiency (User requested shot!)
+  // 4. Return of Serve efficiency
   const retWinnersT1 = stats.shotMatrix['Ret. Serve']?.t1Winners || 0;
   const retErrorsT1 = stats.shotMatrix['Ret. Serve']?.t1Errors || 0;
   const retWinnersT2 = stats.shotMatrix['Ret. Serve']?.t2Winners || 0;
@@ -182,7 +192,7 @@ export function generateTacticalInsights(stats, match) {
     insights.push(`⚠️ **Return Caution:** ${match.team2.name} has given away ${retErrorsT2} points on unforced return errors.`);
   }
 
-  // 4. Player Left vs Right comparison
+  // 5. Player Left vs Right comparison
   const p1L = stats.players['T1-L'];
   const p1R = stats.players['T1-R'];
   if (p1L && p1R && (p1L.winners > 0 || p1R.winners > 0)) {
@@ -203,7 +213,7 @@ export function generateTacticalInsights(stats, match) {
     }
   }
 
-  // 5. Net Game battle
+  // 6. Net Game battle
   const netT1 = stats.netShots.T1;
   const netT2 = stats.netShots.T2;
   if (netT1 > 0 || netT2 > 0) {

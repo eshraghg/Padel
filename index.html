@@ -50,6 +50,7 @@
       <div class="match-meta-bar">
         <span class="badge-court" id="live-court-text">Court 1</span>
         <span id="live-match-timer">00:00</span>
+        <span class="badge-server" id="live-server-badge">🎾 Server: Player 1 (L)</span>
         <span class="badge-rule" id="live-rule-text">Punto de Oro</span>
       </div>
 
@@ -178,6 +179,17 @@
         </div>
       </section>
 
+      <!-- Auto-Save Status & Control Bar -->
+      <div class="autosave-status-bar" id="autosave-bar">
+        <div class="autosave-info">
+          <span class="autosave-dot"></span>
+          <span id="autosave-status-text">💾 Auto-Save: Ready (padel_match_YYYY-MM-DD.json)</span>
+        </div>
+        <div class="autosave-actions">
+          <button type="button" id="btn-quick-json" class="btn-autosave-action" title="Download latest match JSON file copy">📥 JSON</button>
+        </div>
+      </div>
+
       <!-- Action Row: Undo & Log Point -->
       <div class="action-buttons-row">
         <button type="button" class="btn-undo" id="btn-undo-point" title="Undo previous point">
@@ -216,12 +228,71 @@
         </div>
       </div>
 
+      <!-- Scope & Game / Period Filter Bar (Scoresheet) -->
+      <div class="filter-panel-card" id="sheet-filter-panel">
+        <div class="filter-header-row">
+          <div class="filter-title-group">
+            <span class="filter-icon">🔍</span>
+            <div>
+              <div class="filter-heading">Scoresheet Scope & Filter</div>
+              <div class="filter-sub-desc filter-status-lbl">Viewing: Full Match</div>
+            </div>
+          </div>
+          <button type="button" class="btn-reset-scope" style="display:none;" title="Show Full Match">
+            ✕ Full Match
+          </button>
+        </div>
+
+        <div class="filter-mode-nav">
+          <button type="button" class="filter-mode-btn active" data-mode="all">
+            🌐 All Match
+          </button>
+          <button type="button" class="filter-mode-btn" data-mode="game">
+            🎾 By Game
+          </button>
+          <button type="button" class="filter-mode-btn" data-mode="period">
+            ⏱️ By Period / Score
+          </button>
+        </div>
+
+        <div class="filter-box filter-game-box" style="display:none;">
+          <label class="filter-control-label">Select Game to View:</label>
+          <select class="form-select filter-game-select"></select>
+        </div>
+
+        <div class="filter-box filter-period-box" style="display:none;">
+          <div class="period-selectors-row">
+            <div class="period-col">
+              <label class="filter-control-label">From Score / Milestone:</label>
+              <select class="form-select filter-period-from"></select>
+            </div>
+            <div class="period-arrow-divider">➔</div>
+            <div class="period-col">
+              <label class="filter-control-label">To Score / Milestone:</label>
+              <select class="form-select filter-period-to"></select>
+            </div>
+          </div>
+          <div class="quick-presets-row">
+            <span class="preset-label-text">Quick Presets:</span>
+            <div class="preset-pills-wrap"></div>
+          </div>
+        </div>
+
+        <div class="active-scope-banner" style="display:none;">
+          <span class="active-banner-pulse"></span>
+          <span class="active-banner-msg">Filtered Scope Active</span>
+          <span class="active-banner-pts"></span>
+        </div>
+      </div>
+
       <div style="overflow-x:auto;">
         <table class="point-table" id="point-table">
           <thead>
             <tr>
-              <th style="width:40px;">#</th>
-              <th>Score (T1 / T2)</th>
+              <th style="width:36px;">#</th>
+              <th style="width:58px;">Game</th>
+              <th>Score</th>
+              <th>Server</th>
               <th>Team</th>
               <th>Won by</th>
               <th>Player</th>
@@ -257,6 +328,63 @@
         </div>
       </div>
 
+      <!-- Scope & Game / Period Filter Bar (Summary) -->
+      <div class="filter-panel-card" id="summary-filter-panel" style="margin-bottom:14px;">
+        <div class="filter-header-row">
+          <div class="filter-title-group">
+            <span class="filter-icon">🔍</span>
+            <div>
+              <div class="filter-heading">Matrix Scope & Filter</div>
+              <div class="filter-sub-desc filter-status-lbl">Viewing: Full Match</div>
+            </div>
+          </div>
+          <button type="button" class="btn-reset-scope" style="display:none;" title="Show Full Match">
+            ✕ Full Match
+          </button>
+        </div>
+
+        <div class="filter-mode-nav">
+          <button type="button" class="filter-mode-btn active" data-mode="all">
+            🌐 All Match
+          </button>
+          <button type="button" class="filter-mode-btn" data-mode="game">
+            🎾 By Game
+          </button>
+          <button type="button" class="filter-mode-btn" data-mode="period">
+            ⏱️ By Period / Score
+          </button>
+        </div>
+
+        <div class="filter-box filter-game-box" style="display:none;">
+          <label class="filter-control-label">Select Game for Matrix Breakdown:</label>
+          <select class="form-select filter-game-select"></select>
+        </div>
+
+        <div class="filter-box filter-period-box" style="display:none;">
+          <div class="period-selectors-row">
+            <div class="period-col">
+              <label class="filter-control-label">From Score / Milestone:</label>
+              <select class="form-select filter-period-from"></select>
+            </div>
+            <div class="period-arrow-divider">➔</div>
+            <div class="period-col">
+              <label class="filter-control-label">To Score / Milestone:</label>
+              <select class="form-select filter-period-to"></select>
+            </div>
+          </div>
+          <div class="quick-presets-row">
+            <span class="preset-label-text">Quick Presets:</span>
+            <div class="preset-pills-wrap"></div>
+          </div>
+        </div>
+
+        <div class="active-scope-banner" style="display:none;">
+          <span class="active-banner-pulse"></span>
+          <span class="active-banner-msg">Filtered Scope Active</span>
+          <span class="active-banner-pts"></span>
+        </div>
+      </div>
+
       <div class="matrix-table-wrap">
         <table class="matrix-table" id="summary-matrix-table">
           <!-- Rendered dynamically -->
@@ -274,6 +402,63 @@
   <section id="tab-analytics" class="tab-content">
     <div class="analytics-grid">
       
+      <!-- Scope & Game / Period Filter Bar (Analytics) -->
+      <div class="filter-panel-card" id="analytics-filter-panel">
+        <div class="filter-header-row">
+          <div class="filter-title-group">
+            <span class="filter-icon">🔍</span>
+            <div>
+              <div class="filter-heading">Data & Analytics Scope</div>
+              <div class="filter-sub-desc filter-status-lbl">Viewing: Full Match</div>
+            </div>
+          </div>
+          <button type="button" class="btn-reset-scope" style="display:none;" title="Show Full Match">
+            ✕ Full Match
+          </button>
+        </div>
+
+        <div class="filter-mode-nav">
+          <button type="button" class="filter-mode-btn active" data-mode="all">
+            🌐 All Match
+          </button>
+          <button type="button" class="filter-mode-btn" data-mode="game">
+            🎾 By Game
+          </button>
+          <button type="button" class="filter-mode-btn" data-mode="period">
+            ⏱️ By Period / Score
+          </button>
+        </div>
+
+        <div class="filter-box filter-game-box" style="display:none;">
+          <label class="filter-control-label">Select Game to View & Analyze:</label>
+          <select class="form-select filter-game-select"></select>
+        </div>
+
+        <div class="filter-box filter-period-box" style="display:none;">
+          <div class="period-selectors-row">
+            <div class="period-col">
+              <label class="filter-control-label">From Score / Milestone:</label>
+              <select class="form-select filter-period-from"></select>
+            </div>
+            <div class="period-arrow-divider">➔</div>
+            <div class="period-col">
+              <label class="filter-control-label">To Score / Milestone:</label>
+              <select class="form-select filter-period-to"></select>
+            </div>
+          </div>
+          <div class="quick-presets-row">
+            <span class="preset-label-text">Quick Presets:</span>
+            <div class="preset-pills-wrap"></div>
+          </div>
+        </div>
+
+        <div class="active-scope-banner" style="display:none;">
+          <span class="active-banner-pulse"></span>
+          <span class="active-banner-msg">Filtered Scope Active</span>
+          <span class="active-banner-pts"></span>
+        </div>
+      </div>
+
       <!-- KPI Stats Cards -->
       <div class="kpi-row" id="analytics-kpis">
         <div class="kpi-card">
@@ -375,12 +560,39 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Initial Server</label>
-          <select id="setting-server" class="form-select">
-            <option value="T1">Team 1 Serves First</option>
-            <option value="T2">Team 2 Serves First</option>
-          </select>
+        <!-- Initial Server Configuration (Team & Starting Player) -->
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Initial Serving Team</label>
+            <select id="setting-server-team" class="form-select">
+              <option value="T1">Team 1 Serves First</option>
+              <option value="T2">Team 2 Serves First</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Starting Server Player</label>
+            <select id="setting-server-player" class="form-select">
+              <option value="L">Left Player (L)</option>
+              <option value="R">Right Player (R)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid-2" style="margin-top:-6px;">
+          <div class="form-group">
+            <label class="form-label" style="font-size:0.72rem; color:var(--t1-text);">Team 1 Starting Server</label>
+            <select id="setting-server-t1-player" class="form-select" style="font-size:0.8rem; padding:8px 10px;">
+              <option value="L">Left Player (L)</option>
+              <option value="R">Right Player (R)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size:0.72rem; color:var(--t2-text);">Team 2 Starting Server</label>
+            <select id="setting-server-t2-player" class="form-select" style="font-size:0.8rem; padding:8px 10px;">
+              <option value="L">Left Player (L)</option>
+              <option value="R">Right Player (R)</option>
+            </select>
+          </div>
         </div>
 
         <!-- Team 1 Setup (T1 with Left & Right Player) -->

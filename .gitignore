@@ -26,3 +26,8 @@ Thumbs.db
 test_samsung_a50.js
 a50_*.png
 samsung_a50_*.png
+
+# Local match autosave files
+padel_match_*.json
+saved_matches/
+
