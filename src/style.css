@@ -1167,6 +1167,59 @@ body {
   gap: 12px;
 }
 
+.player-rank-badge {
+  margin-left: auto;
+  min-width: 30px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--accent-gold);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.player-radar-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.player-radar-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  min-width: 0;
+}
+
+.player-radar-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.player-radar-label {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 900px) {
+  .player-radar-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .player-radar-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
 .player-stat-box {
   background: rgba(255, 255, 255, 0.03);
   border-radius: var(--radius-sm);

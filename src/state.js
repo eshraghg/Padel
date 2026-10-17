@@ -97,9 +97,78 @@ function getServerForRegularGame(match, gameIndex, initTeam, otherTeam, t1StartP
   };
 }
 
+export const SCORING_RULE_LABELS = {
+  goldenPoint: 'Punto de Oro',
+  advantage: 'Advantage (Ad)',
+  starPoint: 'Star Point'
+};
+
+export function getScoringRuleLabel(rule) {
+  return SCORING_RULE_LABELS[rule] || SCORING_RULE_LABELS.goldenPoint;
+}
+
+// Number of deuces (40-40) after which the next point decides the game under Star Point
+const STAR_POINT_DEUCE = 3;
+
+/**
+ * Apply one point to a regular (non-tiebreak) game. Mutates gameScore.
+ * Deuce handling per rule:
+ * - goldenPoint: the point at 40-40 decides the game.
+ * - advantage: unlimited advantages.
+ * - starPoint (FIP 2026): up to two advantages; on the third 40-40 a single
+ *   decisive "Star Point" is played.
+ * Returns { gameWon, deuceCount } where deuceCount counts 40-40 occurrences in this game.
+ */
+export function applyGamePoint(gameScore, winner, rule, deuceCount = 0) {
+  const loser = winner === 'T1' ? 'T2' : 'T1';
+  const curW = gameScore[winner];
+  const curL = gameScore[loser];
+  let gameWon = false;
+
+  if (curW === '0') {
+    gameScore[winner] = '15';
+  } else if (curW === '15') {
+    gameScore[winner] = '30';
+  } else if (curW === '30') {
+    gameScore[winner] = '40';
+    if (curL === '40') deuceCount++;
+  } else if (curW === '40') {
+    if (curL === '40') {
+      if (rule === 'advantage') {
+        gameScore[winner] = 'Ad';
+      } else if (rule === 'starPoint') {
+        if (deuceCount >= STAR_POINT_DEUCE) gameWon = true; // Star Point
+        else gameScore[winner] = 'Ad';
+      } else {
+        gameWon = true; // Punto de Oro
+      }
+    } else if (curL === 'Ad') {
+      gameScore[loser] = '40';
+      deuceCount++;
+    } else {
+      gameWon = true;
+    }
+  } else if (curW === 'Ad') {
+    gameWon = true;
+  }
+
+  return { gameWon, deuceCount };
+}
+
+// Name of the player credited with the point (winner hitter, or error maker on the opposing team)
+export function getPointPlayerName(match, pt) {
+  const creditedTeam = pt.wonBy === 'E'
+    ? (pt.team === 'T1' ? 'T2' : 'T1')
+    : pt.team;
+  const teamObj = creditedTeam === 'T1' ? match.team1 : match.team2;
+  return pt.player === 'R'
+    ? (teamObj.rightPlayer || 'Right')
+    : (teamObj.leftPlayer || 'Left');
+}
+
 // Compute live state (sets, games, current points, winner) by replaying all points
 export function computeMatchScore(match) {
-  const isAdvantage = match.scoringRule === 'advantage';
+  const rule = match.scoringRule || 'goldenPoint';
   const setsToWin = match.format === 'Best of 5' ? 3 : (match.format === 'Best of 1' ? 1 : 2);
 
   let currentSet = 1;
@@ -112,6 +181,7 @@ export function computeMatchScore(match) {
   let matchFinished = false;
   let matchWinner = null;
   let totalGamesPlayed = 0;
+  let deuceCount = 0;
 
   for (let i = 0; i < (match.points || []).length; i++) {
     const pt = match.points[i];
@@ -126,7 +196,9 @@ export function computeMatchScore(match) {
       const pL = tiebreakPoints[loser];
 
       if (pW >= 7 && (pW - pL) >= 2) {
+        // Tie-break counts as the 13th game: winner takes the set 7-6
         games[winner]++;
+        totalGamesPlayed++;
         setsWon[winner]++;
         completedSets.push({
           set: currentSet,
@@ -147,36 +219,15 @@ export function computeMatchScore(match) {
         }
       }
     } else {
-      const curW = gameScore[winner];
-      const curL = gameScore[loser];
-      let gameWon = false;
-
-      if (curW === '0') {
-        gameScore[winner] = '15';
-      } else if (curW === '15') {
-        gameScore[winner] = '30';
-      } else if (curW === '30') {
-        gameScore[winner] = '40';
-      } else if (curW === '40') {
-        if (curL === '40') {
-          if (!isAdvantage) {
-            gameWon = true; // Punto de Oro
-          } else {
-            gameScore[winner] = 'Ad';
-          }
-        } else if (curL === 'Ad') {
-          gameScore[loser] = '40';
-        } else {
-          gameWon = true;
-        }
-      } else if (curW === 'Ad') {
-        gameWon = true;
-      }
+      const res = applyGamePoint(gameScore, winner, rule, deuceCount);
+      const gameWon = res.gameWon;
+      deuceCount = res.deuceCount;
 
       if (gameWon) {
         games[winner]++;
         totalGamesPlayed++;
         gameScore = { T1: '0', T2: '0' };
+        deuceCount = 0;
 
         const gW = games[winner];
         const gL = games[loser];
@@ -219,6 +270,8 @@ export function computeMatchScore(match) {
     matchFinished,
     matchWinner,
     totalGamesPlayed,
+    deuceCount,
+    isStarPoint: rule === 'starPoint' && !isTiebreak && gameScore.T1 === '40' && gameScore.T2 === '40' && deuceCount >= STAR_POINT_DEUCE,
     currentServerTeam: server.team,
     currentServerPlayer: server.player,
     currentServerName: server.name,
@@ -233,7 +286,7 @@ export function computeMatchScore(match) {
  * - scoreMilestones: score checkpoints (e.g. 0-0, 1-0, 1-1, 2-1... 4-3, 6-4)
  */
 export function getMatchGamesBreakdown(match) {
-  const isAdvantage = match.scoringRule === 'advantage';
+  const rule = match.scoringRule || 'goldenPoint';
   const setsToWin = match.format === 'Best of 5' ? 3 : (match.format === 'Best of 1' ? 1 : 2);
 
   let currentSet = 1;
@@ -246,6 +299,7 @@ export function getMatchGamesBreakdown(match) {
   let matchFinished = false;
   let matchWinner = null;
   let totalGamesPlayed = 0;
+  let deuceCount = 0;
 
   const gamesList = [];
   const annotatedPoints = [];
@@ -290,6 +344,7 @@ export function getMatchGamesBreakdown(match) {
 
       if (pW >= 7 && (pW - pL) >= 2) {
         games[winner]++;
+        totalGamesPlayed++;
         setsWon[winner]++;
         completedSets.push({
           set: currentSet,
@@ -301,28 +356,14 @@ export function getMatchGamesBreakdown(match) {
         setWon = true;
       }
     } else {
-      const curW = gameScore[winner];
-      const curL = gameScore[loser];
-
-      if (curW === '0') gameScore[winner] = '15';
-      else if (curW === '15') gameScore[winner] = '30';
-      else if (curW === '30') gameScore[winner] = '40';
-      else if (curW === '40') {
-        if (curL === '40') {
-          if (!isAdvantage) gameWon = true;
-          else gameScore[winner] = 'Ad';
-        } else if (curL === 'Ad') {
-          gameScore[loser] = '40';
-        } else {
-          gameWon = true;
-        }
-      } else if (curW === 'Ad') {
-        gameWon = true;
-      }
+      const res = applyGamePoint(gameScore, winner, rule, deuceCount);
+      gameWon = res.gameWon;
+      deuceCount = res.deuceCount;
 
       if (gameWon) {
         games[winner]++;
         totalGamesPlayed++;
+        deuceCount = 0;
 
         const gW = games[winner];
         const gL = games[loser];
@@ -403,7 +444,8 @@ export function getMatchGamesBreakdown(match) {
         gameNumber: currentOverallGameNumber,
         pointIndex: i + 1,
         scoreText: `${games.T1} - ${games.T2}`,
-        games: { ...games }
+        games: { ...games },
+        setEnded: setWon
       });
 
       gameScore = { T1: '0', T2: '0' };

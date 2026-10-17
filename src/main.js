@@ -8,9 +8,12 @@ import {
   getMatchGamesBreakdown,
   loadCurrentMatch,
   saveCurrentMatch,
-  archiveCurrentMatch
+  archiveCurrentMatch,
+  getScoringRuleLabel,
+  getPointPlayerName
 } from './state.js';
-import { calculateMatchStatistics, generateTacticalInsights } from './analytics.js';
+import { calculateMatchStatistics, generateTacticalInsights, getPlayerRank } from './analytics.js';
+import { renderRadarChartSvg, buildPlayerRadarData } from './radarChart.js';
 import { playPointSound, toggleSound, isSoundEnabled } from './audio.js';
 import { exportSessionToHtml } from './exportHtml.js';
 import confetti from 'canvas-confetti';
@@ -108,6 +111,7 @@ const elements = {
   kpiOverheadsVal: document.getElementById('kpi-overheads-val'),
   insightsList: document.getElementById('analytics-insights-list'),
   playerCompGrid: document.getElementById('player-comparison-grid'),
+  playerRadarGrid: document.getElementById('player-radar-grid'),
   chartShotBars: document.getElementById('chart-shot-bars'),
   chartMomentum: document.getElementById('chart-momentum'),
 
@@ -416,7 +420,7 @@ function renderAllFilterPanels() {
       }
 
       // Full Set 1 preset
-      const endSet1 = breakdown.scoreMilestones.find(sm => sm.games && (sm.games.T1 >= 6 || sm.games.T2 >= 6));
+      const endSet1 = breakdown.scoreMilestones.find(sm => sm.setEnded);
       if (endSet1) {
         const btnSet1 = document.createElement('button');
         btnSet1.type = 'button';
@@ -901,7 +905,13 @@ function updateUI() {
 // Update live header scoreboard
 function updateScoreboard(state) {
   elements.liveCourt.textContent = currentMatch.court || 'Court 1';
-  elements.liveRule.textContent = currentMatch.scoringRule === 'advantage' ? 'Advantage (Ad)' : 'Punto de Oro';
+  if (state.isTiebreak) {
+    elements.liveRule.textContent = '⚖️ TIE-BREAK (6-6)';
+  } else if (state.isStarPoint) {
+    elements.liveRule.textContent = '⭐ STAR POINT';
+  } else {
+    elements.liveRule.textContent = getScoringRuleLabel(currentMatch.scoringRule);
+  }
 
   // Live Server Badge (Feature 3)
   if (elements.liveServerBadge) {
@@ -1131,7 +1141,7 @@ function renderScoresheetTable(pointsToRender = null, filterContext = null) {
   elements.sheetCourt.textContent = currentMatch.court || '-';
   elements.sheetT1.textContent = `${currentMatch.team1.name} (L: ${currentMatch.team1.leftPlayer || 'L'}, R: ${currentMatch.team1.rightPlayer || 'R'})`;
   elements.sheetT2.textContent = `${currentMatch.team2.name} (L: ${currentMatch.team2.leftPlayer || 'L'}, R: ${currentMatch.team2.rightPlayer || 'R'})`;
-  elements.sheetFormat.textContent = `${currentMatch.format} • ${currentMatch.scoringRule === 'advantage' ? 'Advantage' : 'Punto de Oro'}`;
+  elements.sheetFormat.textContent = `${currentMatch.format} • ${getScoringRuleLabel(currentMatch.scoringRule)}`;
   elements.sheetTime.textContent = currentMatch.startTime || '-';
 
   elements.pointTableBody.innerHTML = '';
@@ -1155,7 +1165,7 @@ function renderScoresheetTable(pointsToRender = null, filterContext = null) {
     const isT1 = pt.team === 'T1';
     const wonByText = pt.wonBy === 'W' ? 'W (Winner)' : "E (Error)";
     const wonClass = pt.wonBy === 'W' ? 'won-badge-w' : 'won-badge-e';
-    const playerText = pt.player === 'L' ? 'L (Left)' : 'R (Right)';
+    const playerText = getPointPlayerName(currentMatch, pt);
 
     const row = document.createElement('tr');
     row.className = 'row-clickable';
@@ -1256,27 +1266,23 @@ function renderSummaryMatrix(pointsToRender = null, filterContext = null) {
   });
   bodyHtml += `<td class="total-cell" style="color:var(--t1-text);">${stats.t1Winners}</td></tr>`;
 
-  // 1a. T1 Left Player Winners
-  const t1L = stats.players['T1-L'];
-  bodyHtml += `<tr class="row-sub"><td style="text-align:left; padding-left:18px;">↳ L: ${t1L.name}</td>`;
-  let t1LTotal = 0;
-  shotIds.forEach(id => {
-    const val = t1L.shots[id]?.winners || 0;
-    t1LTotal += val;
-    bodyHtml += `<td class="${val > 0 ? 'val-nonzero' : 'val-zero'}">${val}</td>`;
-  });
-  bodyHtml += `<td class="total-cell">${t1LTotal}</td></tr>`;
+  // Per-player sub-row (field: 'winners' | 'errors')
+  const playerSubRow = (pKey, field) => {
+    const p = stats.players[pKey];
+    const side = pKey.endsWith('-L') ? 'L' : 'R';
+    let row = `<tr class="row-sub"><td style="text-align:left; padding-left:18px;">↳ ${side}: ${p.name}</td>`;
+    let total = 0;
+    shotIds.forEach(id => {
+      const val = p.shots[id]?.[field] || 0;
+      total += val;
+      row += `<td class="${val > 0 ? 'val-nonzero' : 'val-zero'}">${val}</td>`;
+    });
+    return row + `<td class="total-cell">${total}</td></tr>`;
+  };
 
-  // 1b. T1 Right Player Winners
-  const t1R = stats.players['T1-R'];
-  bodyHtml += `<tr class="row-sub"><td style="text-align:left; padding-left:18px;">↳ R: ${t1R.name}</td>`;
-  let t1RTotal = 0;
-  shotIds.forEach(id => {
-    const val = t1R.shots[id]?.winners || 0;
-    t1RTotal += val;
-    bodyHtml += `<td class="${val > 0 ? 'val-nonzero' : 'val-zero'}">${val}</td>`;
-  });
-  bodyHtml += `<td class="total-cell">${t1RTotal}</td></tr>`;
+  // 1a/1b. T1 Left & Right Player Winners
+  bodyHtml += playerSubRow('T1-L', 'winners');
+  bodyHtml += playerSubRow('T1-R', 'winners');
 
   // 2. T2 Winners (Total)
   bodyHtml += `<tr class="row-t2"><td style="text-align:left; font-weight:800; color:var(--t2-text);">T2 Winners (${currentMatch.team2.name})</td>`;
@@ -1286,27 +1292,9 @@ function renderSummaryMatrix(pointsToRender = null, filterContext = null) {
   });
   bodyHtml += `<td class="total-cell" style="color:var(--t2-text);">${stats.t2Winners}</td></tr>`;
 
-  // 2a. T2 Left Player Winners
-  const t2L = stats.players['T2-L'];
-  bodyHtml += `<tr class="row-sub"><td style="text-align:left; padding-left:18px;">↳ L: ${t2L.name}</td>`;
-  let t2LTotal = 0;
-  shotIds.forEach(id => {
-    const val = t2L.shots[id]?.winners || 0;
-    t2LTotal += val;
-    bodyHtml += `<td class="${val > 0 ? 'val-nonzero' : 'val-zero'}">${val}</td>`;
-  });
-  bodyHtml += `<td class="total-cell">${t2LTotal}</td></tr>`;
-
-  // 2b. T2 Right Player Winners
-  const t2R = stats.players['T2-R'];
-  bodyHtml += `<tr class="row-sub"><td style="text-align:left; padding-left:18px;">↳ R: ${t2R.name}</td>`;
-  let t2RTotal = 0;
-  shotIds.forEach(id => {
-    const val = t2R.shots[id]?.winners || 0;
-    t2RTotal += val;
-    bodyHtml += `<td class="${val > 0 ? 'val-nonzero' : 'val-zero'}">${val}</td>`;
-  });
-  bodyHtml += `<td class="total-cell">${t2RTotal}</td></tr>`;
+  // 2a/2b. T2 Left & Right Player Winners
+  bodyHtml += playerSubRow('T2-L', 'winners');
+  bodyHtml += playerSubRow('T2-R', 'winners');
 
   // 3. Errors (opp.)
   bodyHtml += `<tr><td style="text-align:left; font-weight:700; color:var(--accent-danger);">T1 Errors Committed</td>`;
@@ -1316,12 +1304,20 @@ function renderSummaryMatrix(pointsToRender = null, filterContext = null) {
   });
   bodyHtml += `<td class="total-cell" style="color:var(--accent-danger);">${stats.t1Errors}</td></tr>`;
 
+  // 3a/3b. T1 Left & Right Player Errors
+  bodyHtml += playerSubRow('T1-L', 'errors');
+  bodyHtml += playerSubRow('T1-R', 'errors');
+
   bodyHtml += `<tr><td style="text-align:left; font-weight:700; color:var(--accent-danger);">T2 Errors Committed</td>`;
   shotIds.forEach(id => {
     const val = stats.shotMatrix[id]?.t2Errors || 0;
     bodyHtml += `<td class="${val > 0 ? 'val-nonzero' : 'val-zero'}">${val}</td>`;
   });
   bodyHtml += `<td class="total-cell" style="color:var(--accent-danger);">${stats.t2Errors}</td></tr>`;
+
+  // 4a/4b. T2 Left & Right Player Errors
+  bodyHtml += playerSubRow('T2-L', 'errors');
+  bodyHtml += playerSubRow('T2-R', 'errors');
 
   // Total Points Row
   bodyHtml += `<tr style="border-top:2px solid rgba(255,255,255,0.15);"><td style="text-align:left; font-weight:800; color:#fff;">Total Points Decided</td>`;
@@ -1338,7 +1334,10 @@ function renderSummaryMatrix(pointsToRender = null, filterContext = null) {
   if (ctx && ctx.mode !== 'all') {
     elements.summaryFinalScores.textContent = `${ctx.label} (${points.length} points in scope)`;
   } else if (scoreState.completedSets.length > 0) {
-    const scoresStr = scoreState.completedSets.map(cs => `${cs.t1}-${cs.t2}`).join(' , ');
+    const scoresStr = scoreState.completedSets.map(cs => {
+      const tb = cs.tiebreak ? ` (TB ${cs.tiebreak.T1}-${cs.tiebreak.T2})` : '';
+      return `${cs.t1}-${cs.t2}${tb}`;
+    }).join(' , ');
     elements.summaryFinalScores.textContent = scoresStr;
   } else {
     elements.summaryFinalScores.textContent = `Set 1 in progress (${scoreState.games.T1} - ${scoreState.games.T2})`;
@@ -1379,8 +1378,18 @@ function exportToCsv() {
   addCsvRow(`↳ T2 Right: ${stats.players['T2-R'].name}`, shotIds.map(id => stats.players['T2-R'].shots[id]?.winners || 0), stats.players['T2-R'].winners);
 
   addCsvRow('T1 Errors', shotIds.map(id => stats.shotMatrix[id]?.t1Errors || 0), stats.t1Errors);
+  addCsvRow(`↳ T1 Left: ${stats.players['T1-L'].name}`, shotIds.map(id => stats.players['T1-L'].shots[id]?.errors || 0), stats.players['T1-L'].errors);
+  addCsvRow(`↳ T1 Right: ${stats.players['T1-R'].name}`, shotIds.map(id => stats.players['T1-R'].shots[id]?.errors || 0), stats.players['T1-R'].errors);
   addCsvRow('T2 Errors', shotIds.map(id => stats.shotMatrix[id]?.t2Errors || 0), stats.t2Errors);
+  addCsvRow(`↳ T2 Left: ${stats.players['T2-L'].name}`, shotIds.map(id => stats.players['T2-L'].shots[id]?.errors || 0), stats.players['T2-L'].errors);
+  addCsvRow(`↳ T2 Right: ${stats.players['T2-R'].name}`, shotIds.map(id => stats.players['T2-R'].shots[id]?.errors || 0), stats.players['T2-R'].errors);
   addCsvRow('Total Points', shotIds.map(id => stats.shotMatrix[id]?.total || 0), stats.totalPoints);
+
+  csv += '\nPlayer,Winners,Errors,Total Shots,Rank\n';
+  ['T1-L', 'T1-R', 'T2-L', 'T2-R'].forEach(key => {
+    const p = stats.players[key];
+    csv += [`"${p.name}"`, p.winners, p.errors, p.winners + p.errors, getPlayerRank(p)].join(',') + '\n';
+  });
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -1431,6 +1440,9 @@ function renderAnalyticsView(pointsToRender = null, filterContext = null) {
   // 3. Player Comparison Cards
   renderPlayerComparisonCards(stats);
 
+  // 3b. Player Shot Radar Charts (Winners & Errors)
+  renderPlayerRadarCharts(stats);
+
   // 4. SVG Shot Distribution Bar Chart
   renderShotDistributionChart(stats);
 
@@ -1468,6 +1480,7 @@ function renderPlayerComparisonCards(stats) {
       <div class="player-stat-header">
         <div class="player-side-pill">${p.side}</div>
         <div class="player-stat-name" style="color:${tagColor};">${p.data.name}</div>
+        <div class="player-rank-badge" title="Player rank (D → C+)">${getPlayerRank(p.data)}</div>
       </div>
       <div class="stat-metric-row">
         <span>Winners:</span>
@@ -1487,13 +1500,43 @@ function renderPlayerComparisonCards(stats) {
   });
 }
 
+function renderPlayerRadarCharts(stats) {
+  if (!elements.playerRadarGrid) return;
+  const { players, labels, maxValue } = buildPlayerRadarData(stats, SHOT_TYPES);
+
+  elements.playerRadarGrid.innerHTML = players.map(p => {
+    const tagColor = p.team === 'T1' ? 'var(--t1-text)' : 'var(--t2-text)';
+    const winnersTotal = p.winners.reduce((a, b) => a + b, 0);
+    const errorsTotal = p.errors.reduce((a, b) => a + b, 0);
+    return `
+      <div class="player-radar-box">
+        <div class="player-stat-header">
+          <div class="player-side-pill">${p.side}</div>
+          <div class="player-stat-name" style="color:${tagColor};">${p.name}</div>
+          <div class="player-rank-badge" title="Player rank (D → C+)">${getPlayerRank(stats.players[p.key])}</div>
+        </div>
+        <div class="player-radar-pair">
+          <div>
+            <div class="player-radar-label" style="color:#10b981;">Winners (${winnersTotal})</div>
+            ${renderRadarChartSvg({ labels, values: p.winners, color: '#10b981', maxValue, seriesLabel: 'Winners' })}
+          </div>
+          <div>
+            <div class="player-radar-label" style="color:#ef4444;">Errors (${errorsTotal})</div>
+            ${renderRadarChartSvg({ labels, values: p.errors, color: '#ef4444', maxValue, seriesLabel: 'Errors' })}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function renderShotDistributionChart(stats) {
   const shotIds = SHOT_TYPES.map(s => s.id);
-  const width = 640;
-  const height = 240;
   const barWidth = 18;
   const gap = 12;
   const startX = 40;
+  const width = Math.max(640, startX + shotIds.length * (barWidth * 2 + gap) + 10);
+  const height = 240;
   const baseY = height - 40;
 
   let maxVal = 1;

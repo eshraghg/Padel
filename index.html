@@ -500,6 +500,15 @@
         <div class="player-comp-grid" id="player-comparison-grid"></div>
       </div>
 
+      <!-- Player Shot Radar Charts (Winners & Errors per player) -->
+      <div class="chart-card">
+        <div class="chart-title">
+          <span>🕸️ Player Shot Radar (Winners vs Errors)</span>
+          <span style="font-size:0.7rem; color:var(--text-muted);">Number of shots per type</span>
+        </div>
+        <div class="player-radar-grid" id="player-radar-grid"></div>
+      </div>
+
       <!-- Shot Breakdown Bar Chart (SVG) -->
       <div class="chart-card">
         <div class="chart-title">
@@ -556,6 +565,7 @@
             <select id="setting-rule" class="form-select">
               <option value="goldenPoint">Punto de Oro (Golden Point)</option>
               <option value="advantage">Traditional Advantage (Ad)</option>
+              <option value="starPoint">Star Point (FIP 2026: 2 advantages, then deciding point)</option>
             </select>
           </div>
         </div>

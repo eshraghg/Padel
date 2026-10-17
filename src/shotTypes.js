@@ -116,6 +116,33 @@ export const SHOT_TYPES = [
     badgeClass: 'badge-chiquita',
     icon: '🎯',
     description: 'Soft dip shot aimed at the feet of net players'
+  },
+  {
+    id: 'Rulo',
+    short: 'Rulo',
+    name: 'Rulo',
+    category: 'Tactical Overhead',
+    badgeClass: 'badge-smash',
+    icon: '🌀',
+    description: 'Topspin overhead that kicks high off the floor'
+  },
+  {
+    id: 'C.Pared',
+    short: 'C.Pared',
+    name: 'Contra Pared',
+    category: 'Wall Shot',
+    badgeClass: 'badge-wall',
+    icon: '🔙',
+    description: 'Ball hit into own back wall to send it over the net'
+  },
+  {
+    id: 'Gancho',
+    short: 'Gancho',
+    name: 'Gancho',
+    category: 'Tactical Overhead',
+    badgeClass: 'badge-vibora',
+    icon: '🪝',
+    description: 'Hooked overhead with side spin, angled across the court'
   }
 ];
 

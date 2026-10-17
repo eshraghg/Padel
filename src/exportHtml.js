@@ -1,7 +1,8 @@
 // Export Session as a Self-Contained HTML File
 import { SHOT_TYPES } from './shotTypes.js';
-import { computeMatchScore } from './state.js';
-import { calculateMatchStatistics, generateTacticalInsights } from './analytics.js';
+import { computeMatchScore, getScoringRuleLabel, getPointPlayerName } from './state.js';
+import { calculateMatchStatistics, generateTacticalInsights, getPlayerRank } from './analytics.js';
+import { renderRadarChartSvg, buildPlayerRadarData } from './radarChart.js';
 
 export function generateReportFilename(match) {
   const clean = (s) => (s || '')
@@ -35,7 +36,10 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
   // Final scores string
   let finalScoresStr = 'In Progress';
   if (scoreState.completedSets.length > 0) {
-    finalScoresStr = scoreState.completedSets.map(cs => `${cs.t1}-${cs.t2}`).join(' , ');
+    finalScoresStr = scoreState.completedSets.map(cs => {
+      const tb = cs.tiebreak ? ` (TB ${cs.tiebreak.T1}-${cs.tiebreak.T2})` : '';
+      return `${cs.t1}-${cs.t2}${tb}`;
+    }).join(' , ');
   } else {
     finalScoresStr = `Set 1 (${scoreState.games.T1} - ${scoreState.games.T2})`;
   }
@@ -54,7 +58,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
     const isT1 = pt.team === 'T1';
     const wonByText = pt.wonBy === 'W' ? 'W (Winner)' : 'E (Error)';
     const wonClass = pt.wonBy === 'W' ? 'color-winner' : 'color-error';
-    const playerText = pt.player === 'L' ? 'L (Left)' : 'R (Right)';
+    const playerText = getPointPlayerName(match, pt);
 
     pointsRowsHtml += `
       <tr>
@@ -90,25 +94,23 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
   });
   matrixBodyHtml += `<td class="font-bold color-t1">${stats.t1Winners}</td></tr>`;
 
-  // T1 L
-  matrixBodyHtml += `<tr class="row-sub"><td>↳ L: ${stats.players['T1-L'].name}</td>`;
-  let t1LTotal = 0;
-  shotIds.forEach(id => {
-    const val = stats.players['T1-L'].shots[id]?.winners || 0;
-    t1LTotal += val;
-    matrixBodyHtml += `<td class="${val > 0 ? 'font-bold' : 'color-muted'}">${val}</td>`;
-  });
-  matrixBodyHtml += `<td class="font-bold">${t1LTotal}</td></tr>`;
+  // Per-player sub-row (field: 'winners' | 'errors')
+  const playerSubRow = (pKey, field) => {
+    const p = stats.players[pKey];
+    const side = pKey.endsWith('-L') ? 'L' : 'R';
+    let row = `<tr class="row-sub"><td>↳ ${side}: ${p.name}</td>`;
+    let total = 0;
+    shotIds.forEach(id => {
+      const val = p.shots[id]?.[field] || 0;
+      total += val;
+      row += `<td class="${val > 0 ? 'font-bold' : 'color-muted'}">${val}</td>`;
+    });
+    return row + `<td class="font-bold">${total}</td></tr>`;
+  };
 
-  // T1 R
-  matrixBodyHtml += `<tr class="row-sub"><td>↳ R: ${stats.players['T1-R'].name}</td>`;
-  let t1RTotal = 0;
-  shotIds.forEach(id => {
-    const val = stats.players['T1-R'].shots[id]?.winners || 0;
-    t1RTotal += val;
-    matrixBodyHtml += `<td class="${val > 0 ? 'font-bold' : 'color-muted'}">${val}</td>`;
-  });
-  matrixBodyHtml += `<td class="font-bold">${t1RTotal}</td></tr>`;
+  // T1 L / R
+  matrixBodyHtml += playerSubRow('T1-L', 'winners');
+  matrixBodyHtml += playerSubRow('T1-R', 'winners');
 
   // T2 row
   matrixBodyHtml += `<tr class="row-t2"><td class="font-bold color-t2">T2 Winners (${t2.name})</td>`;
@@ -118,25 +120,9 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
   });
   matrixBodyHtml += `<td class="font-bold color-t2">${stats.t2Winners}</td></tr>`;
 
-  // T2 L
-  matrixBodyHtml += `<tr class="row-sub"><td>↳ L: ${stats.players['T2-L'].name}</td>`;
-  let t2LTotal = 0;
-  shotIds.forEach(id => {
-    const val = stats.players['T2-L'].shots[id]?.winners || 0;
-    t2LTotal += val;
-    matrixBodyHtml += `<td class="${val > 0 ? 'font-bold' : 'color-muted'}">${val}</td>`;
-  });
-  matrixBodyHtml += `<td class="font-bold">${t2LTotal}</td></tr>`;
-
-  // T2 R
-  matrixBodyHtml += `<tr class="row-sub"><td>↳ R: ${stats.players['T2-R'].name}</td>`;
-  let t2RTotal = 0;
-  shotIds.forEach(id => {
-    const val = stats.players['T2-R'].shots[id]?.winners || 0;
-    t2RTotal += val;
-    matrixBodyHtml += `<td class="${val > 0 ? 'font-bold' : 'color-muted'}">${val}</td>`;
-  });
-  matrixBodyHtml += `<td class="font-bold">${t2RTotal}</td></tr>`;
+  // T2 L / R
+  matrixBodyHtml += playerSubRow('T2-L', 'winners');
+  matrixBodyHtml += playerSubRow('T2-R', 'winners');
 
   // Errors
   matrixBodyHtml += `<tr><td class="font-bold color-error">T1 Errors Committed</td>`;
@@ -145,6 +131,8 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
     matrixBodyHtml += `<td class="${val > 0 ? 'font-bold' : 'color-muted'}">${val}</td>`;
   });
   matrixBodyHtml += `<td class="font-bold color-error">${stats.t1Errors}</td></tr>`;
+  matrixBodyHtml += playerSubRow('T1-L', 'errors');
+  matrixBodyHtml += playerSubRow('T1-R', 'errors');
 
   matrixBodyHtml += `<tr><td class="font-bold color-error">T2 Errors Committed</td>`;
   shotIds.forEach(id => {
@@ -152,6 +140,8 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
     matrixBodyHtml += `<td class="${val > 0 ? 'font-bold' : 'color-muted'}">${val}</td>`;
   });
   matrixBodyHtml += `<td class="font-bold color-error">${stats.t2Errors}</td></tr>`;
+  matrixBodyHtml += playerSubRow('T2-L', 'errors');
+  matrixBodyHtml += playerSubRow('T2-R', 'errors');
 
   // Total
   matrixBodyHtml += `<tr class="row-total"><td class="font-bold">Total Points Decided</td>`;
@@ -191,10 +181,38 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
         <div class="player-header">
           <span class="badge-side">${p.side}</span>
           <span class="font-bold ${p.teamColor}">${p.data.name}</span>
+          <span class="badge-rank" title="Player rank (D → C+)">${getPlayerRank(p.data)}</span>
         </div>
         <div class="stat-line"><span>Winners:</span> <strong class="color-t1">${p.data.winners}</strong></div>
         <div class="stat-line"><span>Errors:</span> <strong class="color-error">${p.data.errors}</strong></div>
         <div class="stat-line"><span>Top Weapon:</span> <strong class="color-gold">${topShot} (${topCount})</strong></div>
+      </div>
+    `;
+  });
+
+  // Player Shot Radar Charts (Winners & Errors)
+  const radarData = buildPlayerRadarData(stats, SHOT_TYPES);
+  let radarHtml = '';
+  radarData.players.forEach(p => {
+    const winnersTotal = p.winners.reduce((a, b) => a + b, 0);
+    const errorsTotal = p.errors.reduce((a, b) => a + b, 0);
+    radarHtml += `
+      <div class="player-card radar-card">
+        <div class="player-header">
+          <span class="badge-side">${p.side}</span>
+          <span class="font-bold ${p.team === 'T1' ? 'color-t1' : 'color-t2'}">${p.name}</span>
+          <span class="badge-rank">${getPlayerRank(stats.players[p.key])}</span>
+        </div>
+        <div class="radar-pair">
+          <div>
+            <div class="radar-label color-winner">Winners (${winnersTotal})</div>
+            ${renderRadarChartSvg({ labels: radarData.labels, values: p.winners, color: '#10b981', maxValue: radarData.maxValue, seriesLabel: 'Winners' })}
+          </div>
+          <div>
+            <div class="radar-label color-error">Errors (${errorsTotal})</div>
+            ${renderRadarChartSvg({ labels: radarData.labels, values: p.errors, color: '#ef4444', maxValue: radarData.maxValue, seriesLabel: 'Errors' })}
+          </div>
+        </div>
       </div>
     `;
   });
@@ -280,6 +298,11 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
     .player-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
     .player-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .badge-side { width: 22px; height: 22px; background: #334155; border-radius: 4px; font-weight: 800; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; }
+    .badge-rank { margin-left: auto; padding: 1px 8px; border-radius: 4px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: var(--gold); font-weight: 900; font-size: 0.78rem; }
+    .radar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 10px; margin-top: 10px; }
+    .radar-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .radar-label { text-align: center; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
+    @media (max-width: 480px) { .radar-grid { grid-template-columns: 1fr; } .radar-pair { grid-template-columns: 1fr; } }
     .stat-line { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
 
     .print-btn { background: var(--t1); color: #022c22; font-weight: 800; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; float: right; }
@@ -307,7 +330,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
       <div class="meta-grid">
         <div><strong>Date:</strong> ${match.date || '-'}</div>
         <div><strong>Court:</strong> ${match.court || '-'}</div>
-        <div><strong>Format:</strong> ${match.format} • ${match.scoringRule === 'advantage' ? 'Advantage' : 'Punto de Oro'}</div>
+        <div><strong>Format:</strong> ${match.format} • ${getScoringRuleLabel(match.scoringRule)}</div>
         <div><strong>Initial Server:</strong> ${match.initialServerTeam === 'T2' ? match.team2.name : match.team1.name} (${match.initialServerPlayer === 'R' ? 'Right' : 'Left'})</div>
         <div><strong>Team 1:</strong> ${t1.name} (L: ${t1.leftPlayer || 'L'}, R: ${t1.rightPlayer || 'R'})</div>
         <div><strong>Team 2:</strong> ${t2.name} (L: ${t2.leftPlayer || 'L'}, R: ${t2.rightPlayer || 'R'})</div>
@@ -366,6 +389,15 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
       </div>
     </div>
 
+    <!-- Player Shot Radar Charts -->
+    <div class="card">
+      <h3 style="font-size:1rem; font-weight:800;">🕸️ Player Shot Radar (Winners vs Errors)</h3>
+      <div class="sub">Number of shots per shot type for each player</div>
+      <div class="radar-grid">
+        ${radarHtml}
+      </div>
+    </div>
+
     <!-- End-of-Set Summary Matrix -->
     <div class="card">
       <h3 style="font-size:1rem; font-weight:800;">📊 End-of-Set Summary Matrix</h3>
@@ -405,7 +437,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
         </table>
       </div>
       <div style="margin-top:12px; font-size:0.72rem; color:var(--muted);">
-        Shot key: Ret. Serve = Return of Serve • F.H = Forehand • B.H = Backhand • FVol = Forehand volley • BVol = Backhand volley • Band = Bandeja • Baj = Bajada • Vib = Vibora • Drop = Dropshot • Chiq. = Chiquita | Bolouri Tennis & Padel Academy
+        Shot key: Ret. Serve = Return of Serve • F.H = Forehand • B.H = Backhand • FVol = Forehand volley • BVol = Backhand volley • Band = Bandeja • Baj = Bajada • Vib = Vibora • Drop = Dropshot • Chiq. = Chiquita • Rulo = Rulo • C.Pared = Contra Pared • Gancho = Gancho | Bolouri Tennis & Padel Academy
       </div>
     </div>
 
