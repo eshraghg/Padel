@@ -1181,7 +1181,7 @@ function renderScoresheetTable(pointsToRender = null, filterContext = null) {
         </div>
       </td>
       <td style="font-size:0.75rem; font-weight:700; color:var(--accent-gold); white-space:nowrap;">
-        🎾 ${annPt.serverPlayer ? `${annPt.serverPlayer} (${annPt.serverTeam})` : '-'}
+        🎾 ${annPt.serverName || '-'}
       </td>
       <td>
         <span class="team-badge-cell ${isT1 ? 't1' : 't2'}">${pt.team}</span>
@@ -1193,7 +1193,7 @@ function renderScoresheetTable(pointsToRender = null, filterContext = null) {
       <td>
         <span class="shot-cell-tag">${pt.shot}</span>
       </td>
-      <td style="color:#64748b; font-size:0.72rem; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+      <td class="sheet-note-cell" style="color:#64748b; font-size:0.72rem; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
         ${pt.note || '—'}
       </td>
       <td>

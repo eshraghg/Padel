@@ -136,15 +136,21 @@ export function calculateMatchStatistics(match, pointsSubset = null) {
 
 /**
  * Player ranking (lowest → highest): D, D+, C-, C, C+
- * Based on total shots (winners + errors) the player was credited with:
+ * Based on total shots (winners + errors) the player was credited with,
+ * excluding the 'Serve' shot type:
  * - < 6: D
  * - 6–8: D+
  * - 9–10: C-
  * - 11+: C if errors >= winners, otherwise C+
  */
 export function getPlayerRank(playerStats) {
-  const winners = playerStats.winners || 0;
-  const errors = playerStats.errors || 0;
+  let winners = 0;
+  let errors = 0;
+  Object.entries(playerStats.shots || {}).forEach(([shotId, s]) => {
+    if (shotId === 'Serve') return;
+    winners += s.winners || 0;
+    errors += s.errors || 0;
+  });
   const totalShots = winners + errors;
 
   if (totalShots < 6) return 'D';
