@@ -136,26 +136,29 @@ export function calculateMatchStatistics(match, pointsSubset = null) {
 
 /**
  * Player ranking (lowest → highest): D, D+, C-, C, C+
- * Based on total shots (winners + errors) the player was credited with,
- * excluding the 'Serve' shot type:
- * - < 6: D
- * - 6–8: D+
- * - 9–10: C-
- * - 11+: C if errors >= winners, otherwise C+
+ * Based on the number of distinct shot types the player was credited with
+ * (a winner or an error), excluding the 'Serve' shot type:
+ * - < 6 types: D
+ * - 6–8 types: D+
+ * - 9–10 types: C-
+ * - 11+ types: C if errors >= winners, otherwise C+ (winners/errors also exclude 'Serve')
  */
 export function getPlayerRank(playerStats) {
   let winners = 0;
   let errors = 0;
+  let shotTypes = 0;
   Object.entries(playerStats.shots || {}).forEach(([shotId, s]) => {
     if (shotId === 'Serve') return;
-    winners += s.winners || 0;
-    errors += s.errors || 0;
+    const w = s.winners || 0;
+    const e = s.errors || 0;
+    winners += w;
+    errors += e;
+    if (w + e > 0) shotTypes++;
   });
-  const totalShots = winners + errors;
 
-  if (totalShots < 6) return 'D';
-  if (totalShots <= 8) return 'D+';
-  if (totalShots <= 10) return 'C-';
+  if (shotTypes < 6) return 'D';
+  if (shotTypes <= 8) return 'D+';
+  if (shotTypes <= 10) return 'C-';
   return errors >= winners ? 'C' : 'C+';
 }
 
