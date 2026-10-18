@@ -123,7 +123,7 @@ export function calculateMatchStatistics(match, pointsSubset = null) {
     // Shot grouping stats
     const netTypes = ['FVol', 'BVol'];
     const overheadTypes = ['Smash', 'Band', 'Baj', 'Vib', 'Rulo', 'Gancho'];
-    const baselineTypes = ['F.H', 'B.H', 'Lob', 'Drop', 'Chiq.', 'Ret. Serve', 'Serve', 'C.Pared'];
+    const baselineTypes = ['F.H', 'B.H', 'FSlice', 'BSlice', 'Lob', 'Drop', 'Chiq.', 'Ret. Serve', 'Serve', 'C.Pared'];
 
     const scoringTeam = pt.team;
     if (netTypes.includes(shotId)) stats.netShots[scoringTeam]++;

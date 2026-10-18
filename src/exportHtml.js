@@ -437,7 +437,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
         </table>
       </div>
       <div style="margin-top:12px; font-size:0.72rem; color:var(--muted);">
-        Shot key: Ret. Serve = Return of Serve • F.H = Forehand • B.H = Backhand • FVol = Forehand volley • BVol = Backhand volley • Band = Bandeja • Baj = Bajada • Vib = Vibora • Drop = Dropshot • Chiq. = Chiquita • Rulo = Rulo • C.Pared = Contra Pared • Gancho = Gancho | Bolouri Tennis & Padel Academy
+        Shot key: Ret. Serve = Return of Serve • F.H = Forehand • B.H = Backhand • FSlice = Forehand slice • BSlice = Backhand slice • FVol = Forehand volley • BVol = Backhand volley • Band = Bandeja • Baj = Bajada • Vib = Vibora • Drop = Dropshot • Chiq. = Chiquita • Rulo = Rulo • C.Pared = Contra Pared • Gancho = Gancho | Bolouri Tennis & Padel Academy
       </div>
     </div>
 

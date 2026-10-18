@@ -46,6 +46,24 @@ export const SHOT_TYPES = [
     description: 'Backhand baseline drive or stroke'
   },
   {
+    id: 'FSlice',
+    short: 'FSlice',
+    name: 'Forehand Slice',
+    category: 'Groundstroke',
+    badgeClass: 'badge-ground',
+    icon: '🔪',
+    description: 'Forehand underspin slice that stays low'
+  },
+  {
+    id: 'BSlice',
+    short: 'BSlice',
+    name: 'Backhand Slice',
+    category: 'Groundstroke',
+    badgeClass: 'badge-ground',
+    icon: '🔪',
+    description: 'Backhand underspin slice that stays low'
+  },
+  {
     id: 'FVol',
     short: 'FVol',
     name: 'Forehand Volley',
