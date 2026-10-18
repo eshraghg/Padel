@@ -708,7 +708,10 @@ function setupEventListeners() {
   });
 
   // Match type changes reshape the form (deuce rules, singles/doubles fields)
-  elements.settingSport.addEventListener('change', updateSettingsMatchTypeFields);
+  elements.settingSport.addEventListener('change', () => {
+    updateSettingsTitleForSport();
+    updateSettingsMatchTypeFields();
+  });
   elements.settingTeamFormat.addEventListener('change', updateSettingsMatchTypeFields);
 
   // Export CSV (Scope-aware)
@@ -1786,6 +1789,22 @@ function populateSettingsForm() {
   }
 
   updateSettingsServerLabels();
+}
+
+// Swap the sport name in the title input (e.g. "Padel Game Score & Analysis" -> "Tennis ..."),
+// or fill in the default title when it is empty
+function updateSettingsTitleForSport() {
+  const sport = SPORTS[elements.settingSport.value] || SPORTS.padel;
+  const title = elements.settingTitle.value.trim();
+  if (!title) {
+    elements.settingTitle.value = `${sport.name} Game Score & Analysis`;
+    return;
+  }
+  const names = Object.values(SPORTS).map(s => s.name);
+  // Titles naming both sports (e.g. "Bolouri Tennis & Padel Academy") are left as they are
+  const mentioned = names.filter(n => new RegExp(`\\b${n}\\b`, 'i').test(title));
+  if (mentioned.length !== 1) return;
+  elements.settingTitle.value = title.replace(new RegExp(`\\b${mentioned[0]}\\b`, 'gi'), sport.name);
 }
 
 // Show the fields that apply to the match type selected in the form (before saving)
