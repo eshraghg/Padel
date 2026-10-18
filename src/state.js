@@ -1,22 +1,26 @@
-// Padel match state management & scoring engine
+// Padel / Tennis match state management & scoring engine
+import { SPORTS, isSingles } from './sports.js';
 
 const STORAGE_KEY = 'padel_current_match';
 const HISTORY_KEY = 'padel_matches_history';
 
-export function createDefaultMatch() {
+export function createDefaultMatch(sport = 'padel', teamFormat = 'singles') {
   const now = new Date();
+  const sportCfg = SPORTS[sport] || SPORTS.padel;
   const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = now.toISOString().split('T')[0];
 
   return {
     id: 'match_' + Date.now(),
-    title: 'Padel Game Score & Analysis',
+    title: `${sportCfg.name} Game Score & Analysis`,
+    sport: sportCfg.id, // 'padel' | 'tennis'
+    teamFormat: sportCfg.id === 'tennis' ? teamFormat : 'doubles', // 'singles' | 'doubles' (tennis only)
     court: 'Court 1',
     date: dateStr,
     startTime: timeStr,
     finishTime: '',
     format: 'Best of 3', // 'Best of 1', 'Best of 3', 'Best of 5'
-    scoringRule: 'goldenPoint', // 'goldenPoint' (Punto de Oro) or 'advantage'
+    scoringRule: sportCfg.defaultRule, // 'goldenPoint' (Punto de Oro / No-Ad), 'advantage' or 'starPoint' (padel)
     team1: {
       id: 'T1',
       name: 'Team 1',
@@ -80,7 +84,9 @@ function getServerForRegularGame(match, gameIndex, initTeam, otherTeam, t1StartP
   const isSecondServer = (serviceGameCount % 2 === 1);
 
   let playerSide;
-  if (team === 'T1') {
+  if (isSingles(match)) {
+    playerSide = 'L'; // Singles: the side's only player always serves
+  } else if (team === 'T1') {
     playerSide = isSecondServer ? (t1StartPlayer === 'L' ? 'R' : 'L') : t1StartPlayer;
   } else {
     playerSide = isSecondServer ? (t2StartPlayer === 'L' ? 'R' : 'L') : t2StartPlayer;
@@ -97,14 +103,9 @@ function getServerForRegularGame(match, gameIndex, initTeam, otherTeam, t1StartP
   };
 }
 
-export const SCORING_RULE_LABELS = {
-  goldenPoint: 'Punto de Oro',
-  advantage: 'Advantage (Ad)',
-  starPoint: 'Star Point'
-};
-
-export function getScoringRuleLabel(rule) {
-  return SCORING_RULE_LABELS[rule] || SCORING_RULE_LABELS.goldenPoint;
+export function getScoringRuleLabel(rule, sport = 'padel') {
+  const rules = (SPORTS[sport] || SPORTS.padel).rules;
+  return (rules.find(r => r.id === rule) || rules[0]).label;
 }
 
 // Number of deuces (40-40) after which the next point decides the game under Star Point
@@ -161,6 +162,7 @@ export function getPointPlayerName(match, pt) {
     ? (pt.team === 'T1' ? 'T2' : 'T1')
     : pt.team;
   const teamObj = creditedTeam === 'T1' ? match.team1 : match.team2;
+  if (isSingles(match)) return teamObj.leftPlayer || teamObj.name;
   return pt.player === 'R'
     ? (teamObj.rightPlayer || 'Right')
     : (teamObj.leftPlayer || 'Left');
@@ -566,6 +568,8 @@ export function createDemoMatch() {
   const match = {
     id: 'demo_' + Date.now(),
     title: 'Premier Padel Showcase - Final',
+    sport: 'padel',
+    teamFormat: 'doubles',
     court: 'Center Court (Glass Court)',
     date: new Date().toISOString().split('T')[0],
     startTime: '18:30',

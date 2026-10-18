@@ -1,4 +1,4 @@
-const CACHE_NAME = 'padelscore-v1';
+const CACHE_NAME = 'padelscore-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

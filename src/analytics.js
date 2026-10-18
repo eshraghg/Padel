@@ -1,11 +1,11 @@
-// Analytics & Statistical Engine for Padel Matches
-import { SHOT_TYPES } from './shotTypes.js';
+// Analytics & Statistical Engine for Padel / Tennis Matches
+import { getSport, getShotTypes, isSingles } from './sports.js';
 
 export function calculateMatchStatistics(match, pointsSubset = null) {
   const points = pointsSubset !== null ? pointsSubset : (match.points || []);
   
   // Initialize matrix for each shot type
-  const shotIds = SHOT_TYPES.map(s => s.id);
+  const shotIds = getShotTypes(match).map(s => s.id);
   
   const stats = {
     totalPoints: points.length,
@@ -137,13 +137,13 @@ export function calculateMatchStatistics(match, pointsSubset = null) {
 /**
  * Player ranking (lowest → highest): D, D+, C-, C, C+
  * Based on the number of distinct shot types the player was credited with
- * (a winner or an error), excluding the 'Serve' shot type:
- * - < 6 types: D
- * - 6–8 types: D+
- * - 9–10 types: C-
- * - 11+ types: C if errors >= winners, otherwise C+ (winners/errors also exclude 'Serve')
+ * (a winner or an error), excluding the 'Serve' shot type.
+ * Padel (17 types): < 6 D • 6–8 D+ • 9–10 C- • 11+ C / C+
+ * Tennis (10 types): < 4 D • 4–5 D+ • 6–7 C- • 8+ C / C+
+ * At the top level: C if errors >= winners, otherwise C+ (winners/errors also exclude 'Serve')
  */
-export function getPlayerRank(playerStats) {
+export function getPlayerRank(playerStats, match = null) {
+  const t = getSport(match).rankThresholds;
   let winners = 0;
   let errors = 0;
   let shotTypes = 0;
@@ -156,9 +156,9 @@ export function getPlayerRank(playerStats) {
     if (w + e > 0) shotTypes++;
   });
 
-  if (shotTypes < 6) return 'D';
-  if (shotTypes <= 8) return 'D+';
-  if (shotTypes <= 10) return 'C-';
+  if (shotTypes < t.dPlus) return 'D';
+  if (shotTypes < t.cMinus) return 'D+';
+  if (shotTypes < t.c) return 'C-';
   return errors >= winners ? 'C' : 'C+';
 }
 
@@ -195,13 +195,14 @@ export function generateTacticalInsights(stats, match, filterContext = null) {
   }
 
   // 3. Best overhead weapons
-  const t1Overheads = (stats.shotMatrix['Smash']?.t1Winners || 0) + (stats.shotMatrix['Band']?.t1Winners || 0) + (stats.shotMatrix['Vib']?.t1Winners || 0);
-  const t2Overheads = (stats.shotMatrix['Smash']?.t2Winners || 0) + (stats.shotMatrix['Band']?.t2Winners || 0) + (stats.shotMatrix['Vib']?.t2Winners || 0);
-  
+  const sport = getSport(match);
+  const t1Overheads = countOverheadWinners(stats, match, 't1Winners');
+  const t2Overheads = countOverheadWinners(stats, match, 't2Winners');
+
   if (t1Overheads > 0 || t2Overheads > 0) {
     const leaderTeam = t1Overheads >= t2Overheads ? match.team1.name : match.team2.name;
     const count = Math.max(t1Overheads, t2Overheads);
-    insights.push(`💥 **Overhead Dominance:** ${leaderTeam} produced **${count}** winners from Smashes, Bandejas & Viboras.`);
+    insights.push(`💥 **Overhead Dominance:** ${leaderTeam} produced **${count}** winners from ${sport.overheadInsight}.`);
   }
 
   // 4. Return of Serve efficiency
@@ -220,10 +221,11 @@ export function generateTacticalInsights(stats, match, filterContext = null) {
     insights.push(`⚠️ **Return Caution:** ${match.team2.name} has given away ${retErrorsT2} points on unforced return errors.`);
   }
 
-  // 5. Player Left vs Right comparison
+  // 5. Player Left vs Right comparison (doubles only)
+  const doubles = !isSingles(match);
   const p1L = stats.players['T1-L'];
   const p1R = stats.players['T1-R'];
-  if (p1L && p1R && (p1L.winners > 0 || p1R.winners > 0)) {
+  if (doubles && p1L && p1R && (p1L.winners > 0 || p1R.winners > 0)) {
     if (p1L.winners > p1R.winners) {
       insights.push(`🛡️ **${match.team1.name} Left Player (${p1L.name})** leads their team attack with **${p1L.winners}** winners.`);
     } else if (p1R.winners > p1L.winners) {
@@ -233,7 +235,7 @@ export function generateTacticalInsights(stats, match, filterContext = null) {
 
   const p2L = stats.players['T2-L'];
   const p2R = stats.players['T2-R'];
-  if (p2L && p2R && (p2L.winners > 0 || p2R.winners > 0)) {
+  if (doubles && p2L && p2R && (p2L.winners > 0 || p2R.winners > 0)) {
     if (p2L.winners > p2R.winners) {
       insights.push(`🛡️ **${match.team2.name} Left Player (${p2L.name})** leads their team attack with **${p2L.winners}** winners.`);
     } else if (p2R.winners > p2L.winners) {
@@ -250,4 +252,11 @@ export function generateTacticalInsights(stats, match, filterContext = null) {
   }
 
   return insights;
+}
+
+// Overhead winners for a team ('t1Winners' | 't2Winners', or both when field is omitted)
+export function countOverheadWinners(stats, match, field = null) {
+  const fields = field ? [field] : ['t1Winners', 't2Winners'];
+  return getSport(match).overheadShots.reduce((sum, id) =>
+    sum + fields.reduce((s, f) => s + (stats.shotMatrix[id]?.[f] || 0), 0), 0);
 }

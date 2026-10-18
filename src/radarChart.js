@@ -75,9 +75,8 @@ export function renderRadarChartSvg({ labels, values, color, maxValue = null, se
  * Build radar data for each player from match statistics.
  * Returns { players: [{ key, name, team, side, winners: number[], errors: number[] }], labels, maxValue }
  */
-export function buildPlayerRadarData(stats, shotTypes) {
+export function buildPlayerRadarData(stats, shotTypes, keys = ['T1-L', 'T1-R', 'T2-L', 'T2-R']) {
   const labels = shotTypes.map(s => s.short);
-  const keys = ['T1-L', 'T1-R', 'T2-L', 'T2-R'];
   let maxValue = 1;
 
   const players = keys.map(key => {

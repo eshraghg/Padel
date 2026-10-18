@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     host: true,
     watch: {
-      ignored: ['**/padel_match_*.json', '**/saved_matches/**']
+      ignored: ['**/padel_match_*.json', '**/tennis_match_*.json', '**/saved_matches/**']
     }
   },
   plugins: [
@@ -24,7 +24,8 @@ export default defineConfig({
               try {
                 const data = JSON.parse(body);
                 const safeDate = String(data.date || new Date().toISOString().split('T')[0]).replace(/[/\\?%*:|"<>]/g, '-').trim();
-                const fileName = `padel_match_${safeDate}.json`;
+                const sport = data.sport === 'tennis' ? 'tennis' : 'padel';
+                const fileName = `${sport}_match_${safeDate}.json`;
                 const rootFilePath = path.resolve(process.cwd(), fileName);
 
                 // Write directly to project folder without prompting the user

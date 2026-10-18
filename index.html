@@ -6,7 +6,7 @@
   <title>Padel Game-Score Analysis | Bolouri Tennis & Padel Academy</title>
   
   <!-- PWA & Mobile Meta -->
-  <meta name="description" content="Padel game-score analysis point-by-point tracking, end-of-set summary, and player analytics for Android & web.">
+  <meta name="description" content="Padel & Tennis game-score analysis point-by-point tracking, end-of-set summary, and player analytics for Android & web.">
   <meta name="theme-color" content="#0a0e17">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -34,7 +34,7 @@
           </svg>
         </div>
         <div>
-          <div class="brand-title">PadelScore</div>
+          <div class="brand-title" id="brand-title">PadelScore</div>
           <div class="academy-sub">Bolouri Tennis & Padel Academy</div>
         </div>
       </div>
@@ -135,7 +135,7 @@
       </section>
 
       <!-- Step 3: Player Selection (Left vs Right player with name) -->
-      <section class="entry-section">
+      <section class="entry-section" id="player-select-section">
         <div class="section-label">
           <span id="player-select-heading">3. Player (Decisive Shot)</span>
           <span class="step-indicator">L / R</span>
@@ -155,8 +155,8 @@
       <!-- Step 4: Shot Choice (13 choices including Ret. Serve) -->
       <section class="entry-section">
         <div class="section-label">
-          <span>4. Shot Choice (PDF Sheet + Ret. Serve)</span>
-          <span class="step-indicator">13 Shots</span>
+          <span id="shot-choice-heading">4. Shot Choice (PDF Sheet + Ret. Serve)</span>
+          <span class="step-indicator" id="shot-count-indicator">13 Shots</span>
         </div>
 
         <!-- Filter category pills -->
@@ -169,14 +169,8 @@
         <div class="note-input-row">
           <input type="text" id="point-note-input" class="note-input" placeholder="Point note (e.g. net cord, out wide, break pt)...">
         </div>
-        <div class="quick-note-pills">
-          <button type="button" class="quick-note-pill" data-note="Net cord">Net cord</button>
-          <button type="button" class="quick-note-pill" data-note="Out wide">Out wide</button>
-          <button type="button" class="quick-note-pill" data-note="Glass out">Glass out</button>
-          <button type="button" class="quick-note-pill" data-note="Break Point">Break Point</button>
-          <button type="button" class="quick-note-pill" data-note="Golden Point">Punto de Oro</button>
-          <button type="button" class="quick-note-pill" data-note="Unforced">Unforced</button>
-        </div>
+        <!-- Quick note pills (rendered per sport) -->
+        <div class="quick-note-pills" id="quick-note-pills"></div>
       </section>
 
       <!-- Auto-Save Status & Control Bar -->
@@ -210,9 +204,9 @@
       <div class="sheet-header-box">
         <div class="sheet-title">
           <span>Bolouri Tennis & Padel Academy</span>
-          <span style="font-size:0.9rem; font-weight:700; color:#10b981;">PADEL</span>
+          <span id="sheet-sport-badge" style="font-size:0.9rem; font-weight:700; color:#10b981;">PADEL</span>
         </div>
-        <div class="sheet-subtitle">Padel Game-Score Analysis – Point-by-Point Sheet</div>
+        <div class="sheet-subtitle" id="sheet-subtitle">Padel Game-Score Analysis – Point-by-Point Sheet</div>
         
         <div class="sheet-meta-grid">
           <div class="sheet-meta-item"><strong>Date:</strong> <span id="sheet-meta-date">-</span></div>
@@ -223,7 +217,7 @@
           <div class="sheet-meta-item"><strong>Time:</strong> <span id="sheet-meta-time">-</span></div>
         </div>
 
-        <div style="font-size:0.7rem; color:#64748b; margin-top:6px; font-style:italic;">
+        <div id="sheet-legend" style="font-size:0.7rem; color:#64748b; margin-top:6px; font-style:italic;">
           Won by W = own winning shot • Won by E = opponent's error • L = Left player • R = Right player
         </div>
       </div>
@@ -308,7 +302,7 @@
       </div>
 
       <div style="margin-top:14px; font-size:0.7rem; color:#64748b; line-height:1.4;">
-        <strong>Shot key:</strong> Ret. Serve = Return of Serve • F.H = Forehand • B.H = Backhand • FSlice = Forehand slice • BSlice = Backhand slice • FVol = Forehand volley • BVol = Backhand volley • Band = Bandeja • Baj = Bajada • Vib = Vibora • Drop = Dropshot • Chiq. = Chiquita • Rulo = Rulo • C.Pared = Contra Pared • Gancho = Gancho | Bolouri Tennis & Padel Academy
+        <strong>Shot key:</strong> <span id="sheet-shot-key"></span> | Bolouri Tennis & Padel Academy
       </div>
     </div>
   </section>
@@ -479,7 +473,7 @@
         <div class="kpi-card">
           <div class="kpi-label">Overhead Winners</div>
           <div class="kpi-val" id="kpi-overheads-val" style="color:var(--accent-gold);">0</div>
-          <div class="kpi-sub">Smash / Band / Vib</div>
+          <div class="kpi-sub" id="kpi-overheads-sub">Smash / Band / Vib</div>
         </div>
       </div>
 
@@ -495,7 +489,7 @@
       <!-- Player Comparison (T1 L vs R and T2 L vs R) -->
       <div class="chart-card">
         <div class="chart-title">
-          <span>👥 Player Performance (Left vs Right)</span>
+          <span id="player-comp-heading">👥 Player Performance (Left vs Right)</span>
         </div>
         <div class="player-comp-grid" id="player-comparison-grid"></div>
       </div>
@@ -535,6 +529,23 @@
       <div class="summary-title" style="margin-bottom:14px;">Match Configuration & Teams</div>
 
       <form id="match-settings-form" class="settings-form">
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Match Type</label>
+            <select id="setting-sport" class="form-select">
+              <option value="padel">Padel</option>
+              <option value="tennis">Tennis</option>
+            </select>
+          </div>
+          <div class="form-group" id="setting-team-format-group">
+            <label class="form-label">Singles / Doubles</label>
+            <select id="setting-team-format" class="form-select">
+              <option value="singles">Singles (1 vs 1)</option>
+              <option value="doubles">Doubles (2 vs 2)</option>
+            </select>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Match Title / Tournament</label>
           <input type="text" id="setting-title" class="form-input" placeholder="e.g. Bolouri Academy Tournament">
@@ -563,9 +574,7 @@
           <div class="form-group">
             <label class="form-label">Deuce / 40-40 Rule</label>
             <select id="setting-rule" class="form-select">
-              <option value="goldenPoint">Punto de Oro (Golden Point)</option>
-              <option value="advantage">Traditional Advantage (Ad)</option>
-              <option value="starPoint">Star Point (FIP 2026: 2 advantages, then deciding point)</option>
+              <!-- Populated per sport -->
             </select>
           </div>
         </div>
@@ -579,7 +588,7 @@
               <option value="T2">Team 2 Serves First</option>
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group doubles-only">
             <label class="form-label">Starting Server Player</label>
             <select id="setting-server-player" class="form-select">
               <option value="L">Left Player (L)</option>
@@ -588,7 +597,7 @@
           </div>
         </div>
 
-        <div class="form-grid-2" style="margin-top:-6px;">
+        <div class="form-grid-2 doubles-only" style="margin-top:-6px;">
           <div class="form-group">
             <label class="form-label" style="font-size:0.72rem; color:var(--t1-text);">Team 1 Starting Server</label>
             <select id="setting-server-t1-player" class="form-select" style="font-size:0.8rem; padding:8px 10px;">
@@ -607,17 +616,17 @@
 
         <!-- Team 1 Setup (T1 with Left & Right Player) -->
         <div class="team-edit-card t1">
-          <div style="font-weight:800; font-size:0.9rem; color:var(--t1-text); margin-bottom:8px;">Team 1 Setup</div>
-          <div class="form-group" style="margin-bottom:8px;">
+          <div style="font-weight:800; font-size:0.9rem; color:var(--t1-text); margin-bottom:8px;" id="setting-t1-heading">Team 1 Setup</div>
+          <div class="form-group doubles-only" style="margin-bottom:8px;">
             <label class="form-label">Team 1 Name</label>
             <input type="text" id="setting-t1-name" class="form-input" placeholder="Team 1">
           </div>
           <div class="form-grid-2">
             <div class="form-group">
-              <label class="form-label">Left Player (L)</label>
+              <label class="form-label" id="setting-t1-left-label">Left Player (L)</label>
               <input type="text" id="setting-t1-left" class="form-input" placeholder="Player 1 (L)">
             </div>
-            <div class="form-group">
+            <div class="form-group doubles-only">
               <label class="form-label">Right Player (R)</label>
               <input type="text" id="setting-t1-right" class="form-input" placeholder="Player 2 (R)">
             </div>
@@ -626,17 +635,17 @@
 
         <!-- Team 2 Setup (T2 with Left & Right Player) -->
         <div class="team-edit-card t2">
-          <div style="font-weight:800; font-size:0.9rem; color:var(--t2-text); margin-bottom:8px;">Team 2 Setup</div>
-          <div class="form-group" style="margin-bottom:8px;">
+          <div style="font-weight:800; font-size:0.9rem; color:var(--t2-text); margin-bottom:8px;" id="setting-t2-heading">Team 2 Setup</div>
+          <div class="form-group doubles-only" style="margin-bottom:8px;">
             <label class="form-label">Team 2 Name</label>
             <input type="text" id="setting-t2-name" class="form-input" placeholder="Team 2">
           </div>
           <div class="form-grid-2">
             <div class="form-group">
-              <label class="form-label">Left Player (L)</label>
+              <label class="form-label" id="setting-t2-left-label">Left Player (L)</label>
               <input type="text" id="setting-t2-left" class="form-input" placeholder="Player 3 (L)">
             </div>
-            <div class="form-group">
+            <div class="form-group doubles-only">
               <label class="form-label">Right Player (R)</label>
               <input type="text" id="setting-t2-right" class="form-input" placeholder="Player 4 (R)">
             </div>
@@ -724,7 +733,7 @@
         </div>
 
         <!-- Player -->
-        <div class="form-group">
+        <div class="form-group" id="edit-player-group">
           <label class="form-label" id="edit-player-heading">Player (L / R)</label>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
             <button type="button" class="player-card-btn" id="edit-player-l" style="padding:8px 10px;">

@@ -1927,3 +1927,8 @@ body {
     overflow-wrap: anywhere;
   }
 }
+
+/* Tennis singles: hide doubles-only setup fields (second player, team name, L/R server) */
+.settings-form.singles .doubles-only {
+  display: none;
+}

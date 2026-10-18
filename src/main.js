@@ -1,5 +1,17 @@
-// Main Application Controller for PadelScore
-import { SHOT_TYPES, SHOT_CATEGORIES } from './shotTypes.js';
+// Main Application Controller for PadelScore / TennisScore
+import {
+  SPORTS,
+  getSport,
+  getSportId,
+  isSingles,
+  getShotTypes,
+  getShotCategories,
+  getShotKeyText,
+  getPlayerKeys,
+  normalizeScoringRule,
+  getMatchTypeLabel,
+  getTeamPlayersText
+} from './sports.js';
 import {
   createDefaultMatch,
   createDemoMatch,
@@ -12,7 +24,7 @@ import {
   getScoringRuleLabel,
   getPointPlayerName
 } from './state.js';
-import { calculateMatchStatistics, generateTacticalInsights, getPlayerRank } from './analytics.js';
+import { calculateMatchStatistics, generateTacticalInsights, getPlayerRank, countOverheadWinners } from './analytics.js';
 import { renderRadarChartSvg, buildPlayerRadarData } from './radarChart.js';
 import { playPointSound, toggleSound, isSoundEnabled } from './audio.js';
 import { exportSessionToHtml } from './exportHtml.js';
@@ -42,6 +54,9 @@ let currentShotCategory = 'All';
 
 // DOM Elements cache
 const elements = {
+  // Branding
+  brandTitle: document.getElementById('brand-title'),
+
   // Scoreboard
   liveCourt: document.getElementById('live-court-text'),
   liveRule: document.getElementById('live-rule-text'),
@@ -69,11 +84,15 @@ const elements = {
   recT2Sub: document.getElementById('rec-t2-sub'),
   btnWonW: document.getElementById('btn-won-w'),
   btnWonE: document.getElementById('btn-won-e'),
+  playerSection: document.getElementById('player-select-section'),
   playerHeading: document.getElementById('player-select-heading'),
   btnPlayerL: document.getElementById('btn-player-l'),
   btnPlayerR: document.getElementById('btn-player-r'),
   recPlayerLName: document.getElementById('rec-player-l-name'),
   recPlayerRName: document.getElementById('rec-player-r-name'),
+  shotChoiceHeading: document.getElementById('shot-choice-heading'),
+  shotCountIndicator: document.getElementById('shot-count-indicator'),
+  quickNotePills: document.getElementById('quick-note-pills'),
   shotCatFilter: document.getElementById('shot-category-filter'),
   shotGrid: document.getElementById('shot-btn-grid'),
   pointNoteInput: document.getElementById('point-note-input'),
@@ -85,6 +104,10 @@ const elements = {
   logPointText: document.getElementById('log-point-text'),
 
   // Sheet View
+  sheetSportBadge: document.getElementById('sheet-sport-badge'),
+  sheetSubtitle: document.getElementById('sheet-subtitle'),
+  sheetLegend: document.getElementById('sheet-legend'),
+  sheetShotKey: document.getElementById('sheet-shot-key'),
   sheetDate: document.getElementById('sheet-meta-date'),
   sheetCourt: document.getElementById('sheet-meta-court'),
   sheetT1: document.getElementById('sheet-meta-t1'),
@@ -109,6 +132,8 @@ const elements = {
   kpiWeRatio: document.getElementById('kpi-we-ratio'),
   kpiReturnsVal: document.getElementById('kpi-returns-val'),
   kpiOverheadsVal: document.getElementById('kpi-overheads-val'),
+  kpiOverheadsSub: document.getElementById('kpi-overheads-sub'),
+  playerCompHeading: document.getElementById('player-comp-heading'),
   insightsList: document.getElementById('analytics-insights-list'),
   playerCompGrid: document.getElementById('player-comparison-grid'),
   playerRadarGrid: document.getElementById('player-radar-grid'),
@@ -117,6 +142,9 @@ const elements = {
 
   // Settings
   settingsForm: document.getElementById('match-settings-form'),
+  settingSport: document.getElementById('setting-sport'),
+  settingTeamFormat: document.getElementById('setting-team-format'),
+  settingTeamFormatGroup: document.getElementById('setting-team-format-group'),
   settingTitle: document.getElementById('setting-title'),
   settingCourt: document.getElementById('setting-court'),
   settingDate: document.getElementById('setting-date'),
@@ -126,6 +154,10 @@ const elements = {
   settingServerPlayer: document.getElementById('setting-server-player'),
   settingServerT1Player: document.getElementById('setting-server-t1-player'),
   settingServerT2Player: document.getElementById('setting-server-t2-player'),
+  settingT1Heading: document.getElementById('setting-t1-heading'),
+  settingT2Heading: document.getElementById('setting-t2-heading'),
+  settingT1LeftLabel: document.getElementById('setting-t1-left-label'),
+  settingT2LeftLabel: document.getElementById('setting-t2-left-label'),
   settingT1Name: document.getElementById('setting-t1-name'),
   settingT1Left: document.getElementById('setting-t1-left'),
   settingT1Right: document.getElementById('setting-t1-right'),
@@ -158,6 +190,7 @@ const elements = {
   editT2NameLbl: document.getElementById('edit-t2-name-lbl'),
   editWonW: document.getElementById('edit-won-w'),
   editWonE: document.getElementById('edit-won-e'),
+  editPlayerGroup: document.getElementById('edit-player-group'),
   editPlayerHeading: document.getElementById('edit-player-heading'),
   editPlayerL: document.getElementById('edit-player-l'),
   editPlayerR: document.getElementById('edit-player-r'),
@@ -183,14 +216,50 @@ let editingPoint = {
 function initApp() {
   setupEventListeners();
   setupFilterEventListeners();
-  renderShotCategories();
-  renderShotButtons();
+  applySportUI();
   updateSoundButton();
   updateUI();
   setupPwa();
 
   const matchDate = currentMatch.date || new Date().toISOString().split('T')[0];
-  updateAutosaveBarStatus(`padel_match_${matchDate}.json`, false);
+  updateAutosaveBarStatus(`${getSportId(currentMatch)}_match_${matchDate}.json`, false);
+}
+
+// Re-render everything that depends on the match type (Padel / Tennis, Singles / Doubles)
+function applySportUI() {
+  const sport = getSport(currentMatch);
+  normalizeScoringRule(currentMatch);
+
+  document.title = `${sport.name} Game-Score Analysis | Bolouri Tennis & Padel Academy`;
+  elements.brandTitle.textContent = sport.brand;
+
+  // Record pad: shots & quick notes
+  const shotIds = getShotTypes(currentMatch).map(s => s.id);
+  if (!shotIds.includes(pendingPoint.shot)) pendingPoint.shot = 'Ret. Serve';
+  if (!getShotCategories(currentMatch).includes(currentShotCategory)) currentShotCategory = 'All';
+  elements.shotCountIndicator.textContent = `${shotIds.length} Shots`;
+  renderShotCategories();
+  renderShotButtons();
+  populateEditShotSelect();
+
+  elements.quickNotePills.innerHTML = sport.quickNotes
+    .map(q => `<button type="button" class="quick-note-pill" data-note="${q.note}">${q.label}</button>`)
+    .join('');
+  elements.pointNoteInput.placeholder = sport.notePlaceholder;
+
+  // Scoresheet header & shot key
+  elements.sheetSportBadge.textContent = getMatchTypeLabel(currentMatch).toUpperCase();
+  elements.sheetSubtitle.textContent = `${sport.name} Game-Score Analysis – Point-by-Point Sheet`;
+  elements.sheetLegend.textContent = isSingles(currentMatch)
+    ? "Won by W = own winning shot • Won by E = opponent's error"
+    : "Won by W = own winning shot • Won by E = opponent's error • L = Left player • R = Right player";
+  elements.sheetShotKey.textContent = getShotKeyText(currentMatch);
+
+  // Analytics labels
+  elements.kpiOverheadsSub.textContent = sport.overheadLabel;
+  elements.playerCompHeading.textContent = isSingles(currentMatch)
+    ? '👥 Player Performance'
+    : '👥 Player Performance (Left vs Right)';
 }
 
 // ========================================================
@@ -533,6 +602,7 @@ function setupEventListeners() {
       currentMatch = createDemoMatch();
       saveCurrentMatch(currentMatch);
       currentFilter.mode = 'all';
+      applySportUI();
       updateUI();
       autoSaveMatchJson({ silent: true });
       switchTab('tab-analytics');
@@ -545,9 +615,11 @@ function setupEventListeners() {
   elements.btnNewMatch.addEventListener('click', () => {
     if (confirm('Start a new match? Current match will be archived.')) {
       archiveCurrentMatch(currentMatch);
-      currentMatch = createDefaultMatch();
+      // Keep the current match type for the new match
+      currentMatch = createDefaultMatch(getSportId(currentMatch), currentMatch.teamFormat);
       saveCurrentMatch(currentMatch);
       currentFilter.mode = 'all';
+      applySportUI();
       updateUI();
       autoSaveMatchJson({ silent: true });
       switchTab('tab-settings');
@@ -591,12 +663,12 @@ function setupEventListeners() {
   });
 
   // Quick note pills
-  document.querySelectorAll('.quick-note-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      const noteText = pill.getAttribute('data-note');
-      elements.pointNoteInput.value = noteText;
-      pendingPoint.note = noteText;
-    });
+  elements.quickNotePills.addEventListener('click', (e) => {
+    const pill = e.target.closest('.quick-note-pill');
+    if (!pill) return;
+    const noteText = pill.getAttribute('data-note');
+    elements.pointNoteInput.value = noteText;
+    pendingPoint.note = noteText;
   });
 
   elements.pointNoteInput.addEventListener('input', (e) => {
@@ -635,6 +707,10 @@ function setupEventListeners() {
     }
   });
 
+  // Match type changes reshape the form (deuce rules, singles/doubles fields)
+  elements.settingSport.addEventListener('change', updateSettingsMatchTypeFields);
+  elements.settingTeamFormat.addEventListener('change', updateSettingsMatchTypeFields);
+
   // Export CSV (Scope-aware)
   elements.btnExportCsv.addEventListener('click', exportToCsv);
 
@@ -660,7 +736,7 @@ function setupEventListeners() {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(currentMatch, null, 2));
     const dlAnchor = document.createElement('a');
     dlAnchor.setAttribute('href', dataStr);
-    dlAnchor.setAttribute('download', `padel_match_${currentMatch.date || 'data'}.json`);
+    dlAnchor.setAttribute('download', `${getSportId(currentMatch)}_match_${currentMatch.date || 'data'}.json`);
     dlAnchor.click();
   });
 
@@ -739,7 +815,7 @@ function setupEventListeners() {
 function populateEditShotSelect() {
   if (!elements.editShotSelect) return;
   elements.editShotSelect.innerHTML = '';
-  SHOT_TYPES.forEach(shot => {
+  getShotTypes(currentMatch).forEach(shot => {
     const opt = document.createElement('option');
     opt.value = shot.id;
     opt.textContent = `${shot.icon} ${shot.short} — ${shot.name}`;
@@ -768,6 +844,11 @@ function updateEditModalUI() {
   } else {
     elements.editPlayerHeading.textContent = `Winner Hit By (${targetTeam.name})`;
   }
+
+  // Singles: the side's only player is always credited
+  const singles = isSingles(currentMatch);
+  elements.editPlayerGroup.style.display = singles ? 'none' : '';
+  if (singles) editingPoint.player = 'L';
 
   elements.editPlayerLLbl.textContent = targetTeam.leftPlayer || 'Left Player';
   elements.editPlayerRLbl.textContent = targetTeam.rightPlayer || 'Right Player';
@@ -832,7 +913,7 @@ function updateSoundButton() {
 // ========================================================
 function renderShotCategories() {
   elements.shotCatFilter.innerHTML = '';
-  SHOT_CATEGORIES.forEach(cat => {
+  getShotCategories(currentMatch).forEach(cat => {
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = `cat-pill ${cat === currentShotCategory ? 'active' : ''}`;
@@ -849,9 +930,10 @@ function renderShotCategories() {
 function renderShotButtons() {
   elements.shotGrid.innerHTML = '';
 
-  const filtered = currentShotCategory === 'All' 
-    ? SHOT_TYPES 
-    : SHOT_TYPES.filter(s => s.category.toLowerCase().includes(currentShotCategory.toLowerCase()));
+  const shotTypes = getShotTypes(currentMatch);
+  const filtered = currentShotCategory === 'All'
+    ? shotTypes
+    : shotTypes.filter(s => s.category.toLowerCase().includes(currentShotCategory.toLowerCase()));
 
   filtered.forEach(shot => {
     const btn = document.createElement('button');
@@ -910,7 +992,7 @@ function updateScoreboard(state) {
   } else if (state.isStarPoint) {
     elements.liveRule.textContent = '⭐ STAR POINT';
   } else {
-    elements.liveRule.textContent = getScoringRuleLabel(currentMatch.scoringRule);
+    elements.liveRule.textContent = getScoringRuleLabel(currentMatch.scoringRule, getSportId(currentMatch));
   }
 
   // Live Server Badge (Feature 3)
@@ -924,7 +1006,9 @@ function updateScoreboard(state) {
   const t1ServerSide = t1Serving ? state.currentServerPlayer : null;
   const t1LText = `L: ${currentMatch.team1.leftPlayer || 'Left'}${t1ServerSide === 'L' ? ' 🎾' : ''}`;
   const t1RText = `R: ${currentMatch.team1.rightPlayer || 'Right'}${t1ServerSide === 'R' ? ' 🎾' : ''}`;
-  elements.sbT1Players.textContent = `${t1LText} • ${t1RText}`;
+  elements.sbT1Players.textContent = isSingles(currentMatch)
+    ? (t1Serving ? 'Serving 🎾' : 'Receiving')
+    : `${t1LText} • ${t1RText}`;
   elements.sbT1Games.textContent = state.games.T1;
   elements.sbT1Points.textContent = state.isTiebreak ? state.tiebreakPoints.T1 : state.gameScore.T1;
 
@@ -934,7 +1018,9 @@ function updateScoreboard(state) {
   const t2ServerSide = t2Serving ? state.currentServerPlayer : null;
   const t2LText = `L: ${currentMatch.team2.leftPlayer || 'Left'}${t2ServerSide === 'L' ? ' 🎾' : ''}`;
   const t2RText = `R: ${currentMatch.team2.rightPlayer || 'Right'}${t2ServerSide === 'R' ? ' 🎾' : ''}`;
-  elements.sbT2Players.textContent = `${t2LText} • ${t2RText}`;
+  elements.sbT2Players.textContent = isSingles(currentMatch)
+    ? (t2Serving ? 'Serving 🎾' : 'Receiving')
+    : `${t2LText} • ${t2RText}`;
   elements.sbT2Games.textContent = state.games.T2;
   elements.sbT2Points.textContent = state.isTiebreak ? state.tiebreakPoints.T2 : state.gameScore.T2;
 
@@ -963,11 +1049,13 @@ function updateRecordPad() {
   const t1 = currentMatch.team1;
   const t2 = currentMatch.team2;
 
+  const singles = isSingles(currentMatch);
+
   // Team buttons
   elements.recT1Name.textContent = t1.name;
-  elements.recT1Sub.textContent = `L: ${t1.leftPlayer || 'L'} | R: ${t1.rightPlayer || 'R'}`;
+  elements.recT1Sub.textContent = singles ? 'Player 1' : `L: ${t1.leftPlayer || 'L'} | R: ${t1.rightPlayer || 'R'}`;
   elements.recT2Name.textContent = t2.name;
-  elements.recT2Sub.textContent = `L: ${t2.leftPlayer || 'L'} | R: ${t2.rightPlayer || 'R'}`;
+  elements.recT2Sub.textContent = singles ? 'Player 2' : `L: ${t2.leftPlayer || 'L'} | R: ${t2.rightPlayer || 'R'}`;
 
   elements.btnTeamT1.classList.toggle('selected', pendingPoint.team === 'T1');
   elements.btnTeamT2.classList.toggle('selected', pendingPoint.team === 'T2');
@@ -976,7 +1064,11 @@ function updateRecordPad() {
   elements.btnWonW.classList.toggle('selected', pendingPoint.wonBy === 'W');
   elements.btnWonE.classList.toggle('selected', pendingPoint.wonBy === 'E');
 
-  // Player Selection (Step 3)
+  // Player Selection (Step 3) — not needed in singles, the side's only player is credited
+  elements.playerSection.style.display = singles ? 'none' : '';
+  if (singles) pendingPoint.player = 'L';
+  elements.shotChoiceHeading.textContent = singles ? '3. Shot Choice' : '4. Shot Choice (PDF Sheet + Ret. Serve)';
+
   let targetTeam = pendingPoint.team === 'T1' ? t1 : t2;
 
   if (pendingPoint.wonBy === 'E') {
@@ -1003,7 +1095,7 @@ function updateRecordPad() {
 // ========================================================
 async function autoSaveMatchJson(options = {}) {
   const safeDate = String(currentMatch.date || new Date().toISOString().split('T')[0]).replace(/[/\\?%*:|"<>]/g, '-').trim();
-  const fileName = `padel_match_${safeDate}.json`;
+  const fileName = `${getSportId(currentMatch)}_match_${safeDate}.json`;
 
   // 1. Date-named LocalStorage backup (prevents accidental loss even if browser is closed)
   try {
@@ -1139,9 +1231,9 @@ function renderScoresheetTable(pointsToRender = null, filterContext = null) {
 
   elements.sheetDate.textContent = currentMatch.date || '-';
   elements.sheetCourt.textContent = currentMatch.court || '-';
-  elements.sheetT1.textContent = `${currentMatch.team1.name} (L: ${currentMatch.team1.leftPlayer || 'L'}, R: ${currentMatch.team1.rightPlayer || 'R'})`;
-  elements.sheetT2.textContent = `${currentMatch.team2.name} (L: ${currentMatch.team2.leftPlayer || 'L'}, R: ${currentMatch.team2.rightPlayer || 'R'})`;
-  elements.sheetFormat.textContent = `${currentMatch.format} • ${getScoringRuleLabel(currentMatch.scoringRule)}`;
+  elements.sheetT1.textContent = getTeamPlayersText(currentMatch, currentMatch.team1);
+  elements.sheetT2.textContent = getTeamPlayersText(currentMatch, currentMatch.team2);
+  elements.sheetFormat.textContent = `${getMatchTypeLabel(currentMatch)} • ${currentMatch.format} • ${getScoringRuleLabel(currentMatch.scoringRule, getSportId(currentMatch))}`;
   elements.sheetTime.textContent = currentMatch.startTime || '-';
 
   elements.pointTableBody.innerHTML = '';
@@ -1243,7 +1335,8 @@ function renderSummaryMatrix(pointsToRender = null, filterContext = null) {
 
   const stats = calculateMatchStatistics(currentMatch, points);
   const scoreState = computeMatchScore(currentMatch);
-  const shotIds = SHOT_TYPES.map(s => s.id);
+  const shotIds = getShotTypes(currentMatch).map(s => s.id);
+  const doubles = !isSingles(currentMatch);
 
   let headerHtml = `
     <thead>
@@ -1266,8 +1359,9 @@ function renderSummaryMatrix(pointsToRender = null, filterContext = null) {
   });
   bodyHtml += `<td class="total-cell" style="color:var(--t1-text);">${stats.t1Winners}</td></tr>`;
 
-  // Per-player sub-row (field: 'winners' | 'errors')
+  // Per-player sub-row (field: 'winners' | 'errors'); singles has one player per side, so no sub-rows
   const playerSubRow = (pKey, field) => {
+    if (!doubles) return '';
     const p = stats.players[pKey];
     const side = pKey.endsWith('-L') ? 'L' : 'R';
     let row = `<tr class="row-sub"><td style="text-align:left; padding-left:18px;">↳ ${side}: ${p.name}</td>`;
@@ -1355,47 +1449,52 @@ function renderSummaryMatrix(pointsToRender = null, filterContext = null) {
 function exportToCsv() {
   const { points, filterContext } = getActiveScopeData();
   const stats = calculateMatchStatistics(currentMatch, points);
-  const shotIds = SHOT_TYPES.map(s => s.id);
+  const shotIds = getShotTypes(currentMatch).map(s => s.id);
+  const doubles = !isSingles(currentMatch);
+  const sportName = getSport(currentMatch).name;
 
   let csv = 'Bolouri Tennis & Padel Academy - Game-Score Analysis Summary\n';
-  csv += `Match: ${currentMatch.title || 'Padel Match'}, Date: ${currentMatch.date}, Court: ${currentMatch.court}\n`;
+  csv += `Match: ${currentMatch.title || `${sportName} Match`}, Type: ${getMatchTypeLabel(currentMatch)}, Date: ${currentMatch.date}, Court: ${currentMatch.court}\n`;
   csv += `Scope: ${filterContext.label} (${points.length} points)\n`;
-  csv += `Team 1: ${currentMatch.team1.name} (L: ${currentMatch.team1.leftPlayer} R: ${currentMatch.team1.rightPlayer})\n`;
-  csv += `Team 2: ${currentMatch.team2.name} (L: ${currentMatch.team2.leftPlayer} R: ${currentMatch.team2.rightPlayer})\n\n`;
+  csv += `Team 1: "${getTeamPlayersText(currentMatch, currentMatch.team1)}"\n`;
+  csv += `Team 2: "${getTeamPlayersText(currentMatch, currentMatch.team2)}"\n\n`;
 
   csv += ['Category', ...shotIds, 'TOTAL'].join(',') + '\n';
 
   const addCsvRow = (title, vals, total) => {
     csv += [`"${title}"`, ...vals, total].join(',') + '\n';
   };
+  const addPlayerRows = (team, field) => {
+    if (!doubles) return;
+    [['L', 'Left'], ['R', 'Right']].forEach(([side, sideName]) => {
+      const p = stats.players[`${team}-${side}`];
+      addCsvRow(`↳ ${team} ${sideName}: ${p.name}`, shotIds.map(id => p.shots[id]?.[field] || 0), p[field]);
+    });
+  };
 
   addCsvRow('T1 Winners', shotIds.map(id => stats.shotMatrix[id]?.t1Winners || 0), stats.t1Winners);
-  addCsvRow(`↳ T1 Left: ${stats.players['T1-L'].name}`, shotIds.map(id => stats.players['T1-L'].shots[id]?.winners || 0), stats.players['T1-L'].winners);
-  addCsvRow(`↳ T1 Right: ${stats.players['T1-R'].name}`, shotIds.map(id => stats.players['T1-R'].shots[id]?.winners || 0), stats.players['T1-R'].winners);
+  addPlayerRows('T1', 'winners');
 
   addCsvRow('T2 Winners', shotIds.map(id => stats.shotMatrix[id]?.t2Winners || 0), stats.t2Winners);
-  addCsvRow(`↳ T2 Left: ${stats.players['T2-L'].name}`, shotIds.map(id => stats.players['T2-L'].shots[id]?.winners || 0), stats.players['T2-L'].winners);
-  addCsvRow(`↳ T2 Right: ${stats.players['T2-R'].name}`, shotIds.map(id => stats.players['T2-R'].shots[id]?.winners || 0), stats.players['T2-R'].winners);
+  addPlayerRows('T2', 'winners');
 
   addCsvRow('T1 Errors', shotIds.map(id => stats.shotMatrix[id]?.t1Errors || 0), stats.t1Errors);
-  addCsvRow(`↳ T1 Left: ${stats.players['T1-L'].name}`, shotIds.map(id => stats.players['T1-L'].shots[id]?.errors || 0), stats.players['T1-L'].errors);
-  addCsvRow(`↳ T1 Right: ${stats.players['T1-R'].name}`, shotIds.map(id => stats.players['T1-R'].shots[id]?.errors || 0), stats.players['T1-R'].errors);
+  addPlayerRows('T1', 'errors');
   addCsvRow('T2 Errors', shotIds.map(id => stats.shotMatrix[id]?.t2Errors || 0), stats.t2Errors);
-  addCsvRow(`↳ T2 Left: ${stats.players['T2-L'].name}`, shotIds.map(id => stats.players['T2-L'].shots[id]?.errors || 0), stats.players['T2-L'].errors);
-  addCsvRow(`↳ T2 Right: ${stats.players['T2-R'].name}`, shotIds.map(id => stats.players['T2-R'].shots[id]?.errors || 0), stats.players['T2-R'].errors);
+  addPlayerRows('T2', 'errors');
   addCsvRow('Total Points', shotIds.map(id => stats.shotMatrix[id]?.total || 0), stats.totalPoints);
 
   csv += '\nPlayer,Winners,Errors,Total Shots,Rank\n';
-  ['T1-L', 'T1-R', 'T2-L', 'T2-R'].forEach(key => {
+  getPlayerKeys(currentMatch).forEach(key => {
     const p = stats.players[key];
-    csv += [`"${p.name}"`, p.winners, p.errors, p.winners + p.errors, getPlayerRank(p)].join(',') + '\n';
+    csv += [`"${p.name}"`, p.winners, p.errors, p.winners + p.errors, getPlayerRank(p, currentMatch)].join(',') + '\n';
   });
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.setAttribute('href', url);
-  link.setAttribute('download', `padel_summary_${currentMatch.date || 'data'}.csv`);
+  link.setAttribute('download', `${getSportId(currentMatch)}_summary_${currentMatch.date || 'data'}.csv`);
   link.click();
 }
 
@@ -1422,10 +1521,7 @@ function renderAnalyticsView(pointsToRender = null, filterContext = null) {
   const retWinners = (stats.shotMatrix['Ret. Serve']?.t1Winners || 0) + (stats.shotMatrix['Ret. Serve']?.t2Winners || 0);
   elements.kpiReturnsVal.textContent = retWinners;
 
-  const overheadWinners = (stats.shotMatrix['Smash']?.t1Winners || 0) + (stats.shotMatrix['Smash']?.t2Winners || 0) +
-                          (stats.shotMatrix['Band']?.t1Winners || 0) + (stats.shotMatrix['Band']?.t2Winners || 0) +
-                          (stats.shotMatrix['Vib']?.t1Winners || 0) + (stats.shotMatrix['Vib']?.t2Winners || 0);
-  elements.kpiOverheadsVal.textContent = overheadWinners;
+  elements.kpiOverheadsVal.textContent = countOverheadWinners(stats, currentMatch);
 
   // 2. Context-Aware Tactical Insights
   const insights = generateTacticalInsights(stats, currentMatch, ctx);
@@ -1453,12 +1549,14 @@ function renderAnalyticsView(pointsToRender = null, filterContext = null) {
 function renderPlayerComparisonCards(stats) {
   elements.playerCompGrid.innerHTML = '';
 
-  const playersList = [
-    { key: 'T1-L', team: 'T1', side: 'L', data: stats.players['T1-L'] },
-    { key: 'T1-R', team: 'T1', side: 'R', data: stats.players['T1-R'] },
-    { key: 'T2-L', team: 'T2', side: 'L', data: stats.players['T2-L'] },
-    { key: 'T2-R', team: 'T2', side: 'R', data: stats.players['T2-R'] }
-  ];
+  const singles = isSingles(currentMatch);
+  const playersList = getPlayerKeys(currentMatch).map(key => ({
+    key,
+    team: key.slice(0, 2),
+    // Side pill: L / R in doubles, player number in singles
+    side: singles ? key.slice(1, 2) : key.slice(3),
+    data: stats.players[key]
+  }));
 
   playersList.forEach(p => {
     const box = document.createElement('div');
@@ -1480,7 +1578,7 @@ function renderPlayerComparisonCards(stats) {
       <div class="player-stat-header">
         <div class="player-side-pill">${p.side}</div>
         <div class="player-stat-name" style="color:${tagColor};">${p.data.name}</div>
-        <div class="player-rank-badge" title="Player rank (D → C+)">${getPlayerRank(p.data)}</div>
+        <div class="player-rank-badge" title="Player rank (D → C+)">${getPlayerRank(p.data, currentMatch)}</div>
       </div>
       <div class="stat-metric-row">
         <span>Winners:</span>
@@ -1502,7 +1600,8 @@ function renderPlayerComparisonCards(stats) {
 
 function renderPlayerRadarCharts(stats) {
   if (!elements.playerRadarGrid) return;
-  const { players, labels, maxValue } = buildPlayerRadarData(stats, SHOT_TYPES);
+  const { players, labels, maxValue } = buildPlayerRadarData(stats, getShotTypes(currentMatch), getPlayerKeys(currentMatch));
+  const singles = isSingles(currentMatch);
 
   elements.playerRadarGrid.innerHTML = players.map(p => {
     const tagColor = p.team === 'T1' ? 'var(--t1-text)' : 'var(--t2-text)';
@@ -1511,9 +1610,9 @@ function renderPlayerRadarCharts(stats) {
     return `
       <div class="player-radar-box">
         <div class="player-stat-header">
-          <div class="player-side-pill">${p.side}</div>
+          <div class="player-side-pill">${singles ? p.team.slice(1) : p.side}</div>
           <div class="player-stat-name" style="color:${tagColor};">${p.name}</div>
-          <div class="player-rank-badge" title="Player rank (D → C+)">${getPlayerRank(stats.players[p.key])}</div>
+          <div class="player-rank-badge" title="Player rank (D → C+)">${getPlayerRank(stats.players[p.key], currentMatch)}</div>
         </div>
         <div class="player-radar-pair">
           <div>
@@ -1531,7 +1630,7 @@ function renderPlayerRadarCharts(stats) {
 }
 
 function renderShotDistributionChart(stats) {
-  const shotIds = SHOT_TYPES.map(s => s.id);
+  const shotIds = getShotTypes(currentMatch).map(s => s.id);
   const barWidth = 18;
   const gap = 12;
   const startX = 40;
@@ -1654,11 +1753,16 @@ function renderMomentumChart(stats) {
 // SETTINGS VIEW & FORM (Feature 3: Serving Player Selection)
 // ========================================================
 function populateSettingsForm() {
+  elements.settingSport.value = getSportId(currentMatch);
+  // Tennis defaults to singles when switching over from a padel match
+  elements.settingTeamFormat.value = getSportId(currentMatch) === 'tennis' && !isSingles(currentMatch) ? 'doubles' : 'singles';
+  updateSettingsMatchTypeFields();
+
   elements.settingTitle.value = currentMatch.title || '';
   elements.settingCourt.value = currentMatch.court || 'Court 1';
   elements.settingDate.value = currentMatch.date || '';
   elements.settingFormat.value = currentMatch.format || 'Best of 3';
-  elements.settingRule.value = currentMatch.scoringRule || 'goldenPoint';
+  elements.settingRule.value = normalizeScoringRule(currentMatch);
 
   elements.settingT1Name.value = currentMatch.team1.name || 'Team 1';
   elements.settingT1Left.value = currentMatch.team1.leftPlayer || '';
@@ -1684,18 +1788,47 @@ function populateSettingsForm() {
   updateSettingsServerLabels();
 }
 
+// Show the fields that apply to the match type selected in the form (before saving)
+function updateSettingsMatchTypeFields() {
+  const sport = SPORTS[elements.settingSport.value] || SPORTS.padel;
+  const isTennis = sport.id === 'tennis';
+  const singles = isTennis && elements.settingTeamFormat.value === 'singles';
+
+  elements.settingTeamFormatGroup.style.display = isTennis ? '' : 'none';
+  elements.settingsForm.classList.toggle('singles', singles);
+
+  // Deuce rule options for the sport; switching sport resets to that sport's default rule
+  const prevRule = elements.settingRule.value;
+  const sportChanged = elements.settingRule.dataset.sport !== sport.id;
+  elements.settingRule.dataset.sport = sport.id;
+  elements.settingRule.innerHTML = sport.rules
+    .map(rule => `<option value="${rule.id}">${rule.option}</option>`)
+    .join('');
+  elements.settingRule.value = !sportChanged && sport.rules.some(rule => rule.id === prevRule) ? prevRule : sport.defaultRule;
+
+  elements.settingT1Heading.textContent = singles ? 'Player 1' : 'Team 1 Setup';
+  elements.settingT2Heading.textContent = singles ? 'Player 2' : 'Team 2 Setup';
+  elements.settingT1LeftLabel.textContent = singles ? 'Player Name' : 'Left Player (L)';
+  elements.settingT2LeftLabel.textContent = singles ? 'Player Name' : 'Left Player (L)';
+  elements.settingT1Left.placeholder = singles ? 'Player 1' : 'Player 1 (L)';
+  elements.settingT2Left.placeholder = singles ? 'Player 2' : 'Player 3 (L)';
+
+  updateSettingsServerLabels();
+}
+
 function updateSettingsServerLabels() {
+  const singles = elements.settingsForm.classList.contains('singles');
   const t1Name = (elements.settingT1Name?.value || '').trim() || 'Team 1';
-  const t1L = (elements.settingT1Left?.value || '').trim() || 'Left Player (T1)';
+  const t1L = (elements.settingT1Left?.value || '').trim() || (singles ? 'Player 1' : 'Left Player (T1)');
   const t1R = (elements.settingT1Right?.value || '').trim() || 'Right Player (T1)';
 
   const t2Name = (elements.settingT2Name?.value || '').trim() || 'Team 2';
-  const t2L = (elements.settingT2Left?.value || '').trim() || 'Left Player (T2)';
+  const t2L = (elements.settingT2Left?.value || '').trim() || (singles ? 'Player 2' : 'Left Player (T2)');
   const t2R = (elements.settingT2Right?.value || '').trim() || 'Right Player (T2)';
 
   if (elements.settingServerTeam && elements.settingServerTeam.options.length >= 2) {
-    elements.settingServerTeam.options[0].textContent = `${t1Name} Serves First`;
-    elements.settingServerTeam.options[1].textContent = `${t2Name} Serves First`;
+    elements.settingServerTeam.options[0].textContent = `${singles ? t1L : t1Name} Serves First`;
+    elements.settingServerTeam.options[1].textContent = `${singles ? t2L : t2Name} Serves First`;
   }
 
   const activeServerTeam = elements.settingServerTeam ? elements.settingServerTeam.value : 'T1';
@@ -1719,19 +1852,40 @@ function updateSettingsServerLabels() {
 }
 
 function saveSettingsFromForm() {
+  const newSport = elements.settingSport.value === 'tennis' ? 'tennis' : 'padel';
+  const newTeamFormat = newSport === 'tennis' ? elements.settingTeamFormat.value : 'doubles';
+  const typeChanged = newSport !== getSportId(currentMatch) || newTeamFormat !== (currentMatch.teamFormat || 'doubles');
+  if (typeChanged && currentMatch.points.length > 0 &&
+      !confirm('This match already has logged points. Change the match type anyway? Shots not available in the new type will be hidden from summaries.')) {
+    return;
+  }
+
+  currentMatch.sport = newSport;
+  currentMatch.teamFormat = newTeamFormat;
+  const singles = isSingles(currentMatch);
+
   currentMatch.title = elements.settingTitle.value.trim();
   currentMatch.court = elements.settingCourt.value.trim();
   currentMatch.date = elements.settingDate.value;
   currentMatch.format = elements.settingFormat.value;
   currentMatch.scoringRule = elements.settingRule.value;
+  normalizeScoringRule(currentMatch);
 
-  currentMatch.team1.name = elements.settingT1Name.value.trim() || 'Team 1';
-  currentMatch.team1.leftPlayer = elements.settingT1Left.value.trim() || 'Player 1 (L)';
-  currentMatch.team1.rightPlayer = elements.settingT1Right.value.trim() || 'Player 2 (R)';
+  if (singles) {
+    // Singles: one player per side, who also names the side
+    currentMatch.team1.leftPlayer = elements.settingT1Left.value.trim() || 'Player 1';
+    currentMatch.team1.name = currentMatch.team1.leftPlayer;
+    currentMatch.team2.leftPlayer = elements.settingT2Left.value.trim() || 'Player 2';
+    currentMatch.team2.name = currentMatch.team2.leftPlayer;
+  } else {
+    currentMatch.team1.name = elements.settingT1Name.value.trim() || 'Team 1';
+    currentMatch.team1.leftPlayer = elements.settingT1Left.value.trim() || 'Player 1 (L)';
+    currentMatch.team1.rightPlayer = elements.settingT1Right.value.trim() || 'Player 2 (R)';
 
-  currentMatch.team2.name = elements.settingT2Name.value.trim() || 'Team 2';
-  currentMatch.team2.leftPlayer = elements.settingT2Left.value.trim() || 'Player 3 (L)';
-  currentMatch.team2.rightPlayer = elements.settingT2Right.value.trim() || 'Player 4 (R)';
+    currentMatch.team2.name = elements.settingT2Name.value.trim() || 'Team 2';
+    currentMatch.team2.leftPlayer = elements.settingT2Left.value.trim() || 'Player 3 (L)';
+    currentMatch.team2.rightPlayer = elements.settingT2Right.value.trim() || 'Player 4 (R)';
+  }
 
   // Feature 3: Server team & player
   const sTeam = elements.settingServerTeam ? elements.settingServerTeam.value : 'T1';
@@ -1747,6 +1901,7 @@ function saveSettingsFromForm() {
 
   saveCurrentMatch(currentMatch);
   autoSaveMatchJson({ silent: true });
+  applySportUI();
   updateUI();
   alert('Match settings updated!');
 }
@@ -1764,11 +1919,12 @@ function handleImportJson(e) {
         saveCurrentMatch(currentMatch);
         autoSaveMatchJson({ silent: true });
         currentFilter.mode = 'all';
+        applySportUI();
         updateUI();
         alert('Match successfully imported!');
         switchTab('tab-record');
       } else {
-        alert('Invalid Padel match file format.');
+        alert('Invalid match file format.');
       }
     } catch (err) {
       alert('Error parsing JSON file.');

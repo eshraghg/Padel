@@ -1,7 +1,12 @@
 // Definition of all Shot types based on the Bolouri Tennis & Padel Academy Sheet + Ret. Serve
+// `sports` lists which match types (see sports.js) offer the shot; `tennisName` overrides the name in tennis
+const ALL_SPORTS = ['padel', 'tennis'];
+const PADEL_ONLY = ['padel'];
+
 export const SHOT_TYPES = [
   {
     id: 'Ret. Serve',
+    sports: ALL_SPORTS,
     short: 'Ret. Serve',
     name: 'Return of Serve',
     category: 'Return',
@@ -11,6 +16,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Serve',
+    sports: ALL_SPORTS,
     short: 'Serve',
     name: 'Serve / Ace',
     category: 'Serve',
@@ -20,8 +26,10 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Smash',
+    sports: ALL_SPORTS,
     short: 'Smash',
     name: 'Smash (Remate)',
+    tennisName: 'Smash',
     category: 'Overhead',
     badgeClass: 'badge-smash',
     icon: '💥',
@@ -29,6 +37,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'F.H',
+    sports: ALL_SPORTS,
     short: 'F.H',
     name: 'Forehand',
     category: 'Groundstroke',
@@ -38,6 +47,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'B.H',
+    sports: ALL_SPORTS,
     short: 'B.H',
     name: 'Backhand',
     category: 'Groundstroke',
@@ -47,6 +57,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'FSlice',
+    sports: ALL_SPORTS,
     short: 'FSlice',
     name: 'Forehand Slice',
     category: 'Groundstroke',
@@ -56,6 +67,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'BSlice',
+    sports: ALL_SPORTS,
     short: 'BSlice',
     name: 'Backhand Slice',
     category: 'Groundstroke',
@@ -65,6 +77,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'FVol',
+    sports: ALL_SPORTS,
     short: 'FVol',
     name: 'Forehand Volley',
     category: 'Volley',
@@ -74,6 +87,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'BVol',
+    sports: ALL_SPORTS,
     short: 'BVol',
     name: 'Backhand Volley',
     category: 'Volley',
@@ -83,6 +97,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Band',
+    sports: PADEL_ONLY,
     short: 'Band',
     name: 'Bandeja',
     category: 'Tactical Overhead',
@@ -92,6 +107,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Baj',
+    sports: PADEL_ONLY,
     short: 'Baj',
     name: 'Bajada',
     category: 'Wall Shot',
@@ -101,6 +117,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Vib',
+    sports: PADEL_ONLY,
     short: 'Vib',
     name: 'Vibora',
     category: 'Tactical Overhead',
@@ -110,8 +127,10 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Lob',
+    sports: ALL_SPORTS,
     short: 'Lob',
     name: 'Lob (Globo)',
+    tennisName: 'Lob',
     category: 'Defense',
     badgeClass: 'badge-defense',
     icon: '🏹',
@@ -119,8 +138,10 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Drop',
+    sports: ALL_SPORTS,
     short: 'Drop',
     name: 'Dropshot (Dejada)',
+    tennisName: 'Dropshot',
     category: 'Finesse',
     badgeClass: 'badge-finesse',
     icon: '🪶',
@@ -128,6 +149,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Chiq.',
+    sports: PADEL_ONLY,
     short: 'Chiq.',
     name: 'Chiquita',
     category: 'Tactical Transition',
@@ -137,6 +159,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Rulo',
+    sports: PADEL_ONLY,
     short: 'Rulo',
     name: 'Rulo',
     category: 'Tactical Overhead',
@@ -146,6 +169,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'C.Pared',
+    sports: PADEL_ONLY,
     short: 'C.Pared',
     name: 'Contra Pared',
     category: 'Wall Shot',
@@ -155,6 +179,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Gancho',
+    sports: PADEL_ONLY,
     short: 'Gancho',
     name: 'Gancho',
     category: 'Tactical Overhead',
@@ -162,18 +187,4 @@ export const SHOT_TYPES = [
     icon: '🪝',
     description: 'Hooked overhead with side spin, angled across the court'
   }
-];
-
-export const SHOT_CATEGORIES = [
-  'All',
-  'Overhead',
-  'Volley',
-  'Groundstroke',
-  'Return',
-  'Serve',
-  'Tactical Overhead',
-  'Wall Shot',
-  'Defense',
-  'Finesse',
-  'Tactical Transition'
 ];

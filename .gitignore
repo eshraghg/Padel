@@ -29,5 +29,6 @@ samsung_a50_*.png
 
 # Local match autosave files
 padel_match_*.json
+tennis_match_*.json
 saved_matches/
 

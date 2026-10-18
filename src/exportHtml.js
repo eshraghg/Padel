@@ -1,7 +1,7 @@
 // Export Session as a Self-Contained HTML File
-import { SHOT_TYPES } from './shotTypes.js';
+import { getSport, getSportId, isSingles, getShotTypes, getShotKeyText, getPlayerKeys, getMatchTypeLabel, getTeamPlayersText } from './sports.js';
 import { computeMatchScore, getScoringRuleLabel, getPointPlayerName } from './state.js';
-import { calculateMatchStatistics, generateTacticalInsights, getPlayerRank } from './analytics.js';
+import { calculateMatchStatistics, generateTacticalInsights, getPlayerRank, countOverheadWinners } from './analytics.js';
 import { renderRadarChartSvg, buildPlayerRadarData } from './radarChart.js';
 
 export function generateReportFilename(match) {
@@ -20,7 +20,9 @@ export function generateReportFilename(match) {
   const p4 = clean(match.team2.rightPlayer) || 'T2R';
   
   const dateStr = match.date || new Date().toISOString().split('T')[0];
-  return `Padel_${p1}_${p2}_vs_${p3}_${p4}_${dateStr}.html`;
+  const sportName = getSport(match).name;
+  if (isSingles(match)) return `${sportName}_${p1}_vs_${p3}_${dateStr}.html`;
+  return `${sportName}_${p1}_${p2}_vs_${p3}_${p4}_${dateStr}.html`;
 }
 
 export function exportSessionToHtml(match, filteredPoints = null, filterContext = null) {
@@ -28,7 +30,10 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
   const scoreState = computeMatchScore(match);
   const stats = calculateMatchStatistics(match, activePoints);
   const insights = generateTacticalInsights(stats, match, filterContext);
-  const shotIds = SHOT_TYPES.map(s => s.id);
+  const shotTypes = getShotTypes(match);
+  const shotIds = shotTypes.map(s => s.id);
+  const sport = getSport(match);
+  const singles = isSingles(match);
 
   const t1 = match.team1;
   const t2 = match.team2;
@@ -96,6 +101,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
 
   // Per-player sub-row (field: 'winners' | 'errors')
   const playerSubRow = (pKey, field) => {
+    if (singles) return ''; // one player per side: the team row already covers it
     const p = stats.players[pKey];
     const side = pKey.endsWith('-L') ? 'L' : 'R';
     let row = `<tr class="row-sub"><td>↳ ${side}: ${p.name}</td>`;
@@ -158,12 +164,12 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
   });
 
   // Player Comparison Cards
-  const playersList = [
-    { side: 'L', data: stats.players['T1-L'], teamColor: 'color-t1', teamTag: 'T1' },
-    { side: 'R', data: stats.players['T1-R'], teamColor: 'color-t1', teamTag: 'T1' },
-    { side: 'L', data: stats.players['T2-L'], teamColor: 'color-t2', teamTag: 'T2' },
-    { side: 'R', data: stats.players['T2-R'], teamColor: 'color-t2', teamTag: 'T2' }
-  ];
+  const playersList = getPlayerKeys(match).map(key => ({
+    side: singles ? key.slice(1, 2) : key.slice(3),
+    data: stats.players[key],
+    teamColor: key.startsWith('T1') ? 'color-t1' : 'color-t2',
+    teamTag: key.slice(0, 2)
+  }));
 
   let playerCompHtml = '';
   playersList.forEach(p => {
@@ -181,7 +187,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
         <div class="player-header">
           <span class="badge-side">${p.side}</span>
           <span class="font-bold ${p.teamColor}">${p.data.name}</span>
-          <span class="badge-rank" title="Player rank (D → C+)">${getPlayerRank(p.data)}</span>
+          <span class="badge-rank" title="Player rank (D → C+)">${getPlayerRank(p.data, match)}</span>
         </div>
         <div class="stat-line"><span>Winners:</span> <strong class="color-t1">${p.data.winners}</strong></div>
         <div class="stat-line"><span>Errors:</span> <strong class="color-error">${p.data.errors}</strong></div>
@@ -191,7 +197,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
   });
 
   // Player Shot Radar Charts (Winners & Errors)
-  const radarData = buildPlayerRadarData(stats, SHOT_TYPES);
+  const radarData = buildPlayerRadarData(stats, shotTypes, getPlayerKeys(match));
   let radarHtml = '';
   radarData.players.forEach(p => {
     const winnersTotal = p.winners.reduce((a, b) => a + b, 0);
@@ -199,9 +205,9 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
     radarHtml += `
       <div class="player-card radar-card">
         <div class="player-header">
-          <span class="badge-side">${p.side}</span>
+          <span class="badge-side">${singles ? p.team.slice(1) : p.side}</span>
           <span class="font-bold ${p.team === 'T1' ? 'color-t1' : 'color-t2'}">${p.name}</span>
-          <span class="badge-rank">${getPlayerRank(stats.players[p.key])}</span>
+          <span class="badge-rank">${getPlayerRank(stats.players[p.key], match)}</span>
         </div>
         <div class="radar-pair">
           <div>
@@ -222,7 +228,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Padel Match Report - ${t1.name} vs ${t2.name} (${match.date})</title>
+  <title>${sport.name} Match Report - ${t1.name} vs ${t2.name} (${match.date})</title>
   <style>
     :root {
       --bg: #0b0f19;
@@ -322,7 +328,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
       <div class="header-box">
         <div>
           <div class="title">Bolouri Tennis & Padel Academy</div>
-          <div class="sub">Official Padel Game-Score Analysis & Match Report</div>
+          <div class="sub">Official ${getMatchTypeLabel(match)} Game-Score Analysis & Match Report</div>
         </div>
         <button class="print-btn" onclick="window.print()">🖨️ Print / Save PDF</button>
       </div>
@@ -330,10 +336,10 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
       <div class="meta-grid">
         <div><strong>Date:</strong> ${match.date || '-'}</div>
         <div><strong>Court:</strong> ${match.court || '-'}</div>
-        <div><strong>Format:</strong> ${match.format} • ${getScoringRuleLabel(match.scoringRule)}</div>
-        <div><strong>Initial Server:</strong> ${match.initialServerTeam === 'T2' ? match.team2.name : match.team1.name} (${match.initialServerPlayer === 'R' ? 'Right' : 'Left'})</div>
-        <div><strong>Team 1:</strong> ${t1.name} (L: ${t1.leftPlayer || 'L'}, R: ${t1.rightPlayer || 'R'})</div>
-        <div><strong>Team 2:</strong> ${t2.name} (L: ${t2.leftPlayer || 'L'}, R: ${t2.rightPlayer || 'R'})</div>
+        <div><strong>Format:</strong> ${getMatchTypeLabel(match)} • ${match.format} • ${getScoringRuleLabel(match.scoringRule, getSportId(match))}</div>
+        <div><strong>Initial Server:</strong> ${match.initialServerTeam === 'T2' ? match.team2.name : match.team1.name}${singles ? '' : ` (${match.initialServerPlayer === 'R' ? 'Right' : 'Left'})`}</div>
+        <div><strong>${singles ? 'Player 1' : 'Team 1'}:</strong> ${getTeamPlayersText(match, t1)}</div>
+        <div><strong>${singles ? 'Player 2' : 'Team 2'}:</strong> ${getTeamPlayersText(match, t2)}</div>
         ${filterContext && filterContext.mode !== 'all' ? `<div style="grid-column: 1 / -1; background: rgba(16,185,129,0.15); padding: 8px 12px; border-radius: 6px; color: var(--t1); font-weight:700;"><strong>🎯 Analysis Scope:</strong> ${filterContext.label || (filterContext.mode === 'game' ? 'Game ' + filterContext.gameNumber : 'Filtered Period')} (${activePoints.length} points)</div>` : ''}
       </div>
     </div>
@@ -369,8 +375,8 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
         </div>
         <div class="kpi-card">
           <div class="kpi-lbl">Overhead Winners</div>
-          <div class="kpi-val color-gold">${(stats.shotMatrix['Smash']?.t1Winners || 0) + (stats.shotMatrix['Smash']?.t2Winners || 0) + (stats.shotMatrix['Band']?.t1Winners || 0) + (stats.shotMatrix['Band']?.t2Winners || 0) + (stats.shotMatrix['Vib']?.t1Winners || 0) + (stats.shotMatrix['Vib']?.t2Winners || 0)}</div>
-          <div style="font-size:0.75rem; color:var(--muted);">Smash / Band / Vib</div>
+          <div class="kpi-val color-gold">${countOverheadWinners(stats, match)}</div>
+          <div style="font-size:0.75rem; color:var(--muted);">${sport.overheadLabel}</div>
         </div>
       </div>
     </div>
@@ -383,7 +389,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
 
     <!-- Player Comparison (Left vs Right) -->
     <div class="card">
-      <h3 style="font-size:1rem; font-weight:800;">👥 Player Performance (Left vs Right)</h3>
+      <h3 style="font-size:1rem; font-weight:800;">👥 Player Performance${singles ? '' : ' (Left vs Right)'}</h3>
       <div class="player-grid">
         ${playerCompHtml}
       </div>
@@ -437,12 +443,12 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
         </table>
       </div>
       <div style="margin-top:12px; font-size:0.72rem; color:var(--muted);">
-        Shot key: Ret. Serve = Return of Serve • F.H = Forehand • B.H = Backhand • FSlice = Forehand slice • BSlice = Backhand slice • FVol = Forehand volley • BVol = Backhand volley • Band = Bandeja • Baj = Bajada • Vib = Vibora • Drop = Dropshot • Chiq. = Chiquita • Rulo = Rulo • C.Pared = Contra Pared • Gancho = Gancho | Bolouri Tennis & Padel Academy
+        Shot key: ${getShotKeyText(match)} | Bolouri Tennis & Padel Academy
       </div>
     </div>
 
     <div style="text-align:center; font-size:0.75rem; color:var(--muted); padding:10px;">
-      Report generated on ${new Date().toLocaleString()} by PadelScore App
+      Report generated on ${new Date().toLocaleString()} by ${sport.brand} App
     </div>
   </div>
 </body>
