@@ -1,5 +1,6 @@
 // Analytics & Statistical Engine for Padel / Tennis Matches
 import { getSport, getShotTypes, isSingles } from './sports.js';
+import { isServeShot } from './shotTypes.js';
 
 export function calculateMatchStatistics(match, pointsSubset = null) {
   const points = pointsSubset !== null ? pointsSubset : (match.points || []);
@@ -121,9 +122,10 @@ export function calculateMatchStatistics(match, pointsSubset = null) {
     }
 
     // Shot grouping stats
-    const netTypes = ['FVol', 'BVol'];
+    const netTypes = ['FVol', 'BVol', 'FDVol', 'BDVol', 'H.Volley'];
     const overheadTypes = ['Smash', 'Band', 'Baj', 'Vib', 'Rulo', 'Gancho'];
-    const baselineTypes = ['F.H', 'B.H', 'FSlice', 'BSlice', 'Lob', 'Drop', 'Chiq.', 'Ret. Serve', 'Serve', 'C.Pared'];
+    const baselineTypes = ['F.H', 'B.H', 'FSlice', 'BSlice', 'Lob', 'Drop', 'Chiq.', 'Ret. Serve', 'Serve', 'C.Pared',
+      'F.H DTL', 'F.H CC', 'B.H DTL', 'B.H CC', 'On Rise', 'Kick S.', 'Slice S.', 'Flat S.'];
 
     const scoringTeam = pt.team;
     if (netTypes.includes(shotId)) stats.netShots[scoringTeam]++;
@@ -137,10 +139,10 @@ export function calculateMatchStatistics(match, pointsSubset = null) {
 /**
  * Player ranking (lowest → highest): D, D+, C-, C, C+
  * Based on the number of distinct shot types the player was credited with
- * (a winner or an error), excluding the 'Serve' shot type.
- * Padel (17 types): < 6 D • 6–8 D+ • 9–10 C- • 11+ C / C+
- * Tennis (10 types): < 4 D • 4–5 D+ • 6–7 C- • 8+ C / C+
- * At the top level: C if errors >= winners, otherwise C+ (winners/errors also exclude 'Serve')
+ * (a winner or an error), excluding serves (padel 'Serve', tennis Kick / Slice / Flat).
+ * Padel (19 types): < 6 D • 6–8 D+ • 9–10 C- • 11+ C / C+
+ * Tennis (18 types): < 4 D • 4–5 D+ • 6–7 C- • 8+ C / C+
+ * At the top level: C if errors >= winners, otherwise C+ (winners/errors also exclude serves)
  */
 export function getPlayerRank(playerStats, match = null) {
   const t = getSport(match).rankThresholds;
@@ -148,7 +150,7 @@ export function getPlayerRank(playerStats, match = null) {
   let errors = 0;
   let shotTypes = 0;
   Object.entries(playerStats.shots || {}).forEach(([shotId, s]) => {
-    if (shotId === 'Serve') return;
+    if (isServeShot(shotId)) return;
     const w = s.winners || 0;
     const e = s.errors || 0;
     winners += w;

@@ -234,7 +234,7 @@ function applySportUI() {
   elements.brandTitle.textContent = sport.brand;
 
   // Record pad: shots & quick notes
-  const shotIds = getShotTypes(currentMatch).map(s => s.id);
+  const shotIds = getShotTypes(currentMatch, { sportOnly: true }).map(s => s.id);
   if (!shotIds.includes(pendingPoint.shot)) pendingPoint.shot = 'Ret. Serve';
   if (!getShotCategories(currentMatch).includes(currentShotCategory)) currentShotCategory = 'All';
   elements.shotCountIndicator.textContent = `${shotIds.length} Shots`;
@@ -933,7 +933,7 @@ function renderShotCategories() {
 function renderShotButtons() {
   elements.shotGrid.innerHTML = '';
 
-  const shotTypes = getShotTypes(currentMatch);
+  const shotTypes = getShotTypes(currentMatch, { sportOnly: true });
   const filtered = currentShotCategory === 'All'
     ? shotTypes
     : shotTypes.filter(s => s.category.toLowerCase().includes(currentShotCategory.toLowerCase()));

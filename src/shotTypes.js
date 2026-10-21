@@ -2,6 +2,15 @@
 // `sports` lists which match types (see sports.js) offer the shot; `tennisName` overrides the name in tennis
 const ALL_SPORTS = ['padel', 'tennis'];
 const PADEL_ONLY = ['padel'];
+const TENNIS_ONLY = ['tennis'];
+
+function tennisVariant(id, name, base, icon, description) {
+  return { id, sports: TENNIS_ONLY, short: id, name, category: base.category, badgeClass: base.badgeClass, icon, description };
+}
+
+const SERVE = { category: 'Serve', badgeClass: 'badge-serve' };
+const GROUND = { category: 'Groundstroke', badgeClass: 'badge-ground' };
+const VOLLEY = { category: 'Volley', badgeClass: 'badge-volley' };
 
 export const SHOT_TYPES = [
   {
@@ -16,7 +25,7 @@ export const SHOT_TYPES = [
   },
   {
     id: 'Serve',
-    sports: ALL_SPORTS,
+    sports: PADEL_ONLY,
     short: 'Serve',
     name: 'Serve / Ace',
     category: 'Serve',
@@ -24,6 +33,9 @@ export const SHOT_TYPES = [
     icon: '⚡',
     description: 'Service ace, service winner or fault'
   },
+  tennisVariant('Kick S.', 'Kick Serve', SERVE, '⚡', 'Topspin serve that kicks up high off the bounce'),
+  tennisVariant('Slice S.', 'Slice Serve', SERVE, '⚡', 'Sidespin serve that curves away from the receiver'),
+  tennisVariant('Flat S.', 'Flat Serve', SERVE, '⚡', 'Fast serve hit with little spin'),
   {
     id: 'Smash',
     sports: ALL_SPORTS,
@@ -45,6 +57,8 @@ export const SHOT_TYPES = [
     icon: '🎾',
     description: 'Forehand baseline drive or stroke'
   },
+  tennisVariant('F.H DTL', 'Forehand Down the Line', GROUND, '🎾', 'Forehand hit parallel to the sideline'),
+  tennisVariant('F.H CC', 'Forehand Cross Court', GROUND, '🎾', 'Forehand hit diagonally across the court'),
   {
     id: 'B.H',
     sports: ALL_SPORTS,
@@ -55,6 +69,8 @@ export const SHOT_TYPES = [
     icon: '🎾',
     description: 'Backhand baseline drive or stroke'
   },
+  tennisVariant('B.H DTL', 'Backhand Down the Line', GROUND, '🎾', 'Backhand hit parallel to the sideline'),
+  tennisVariant('B.H CC', 'Backhand Cross Court', GROUND, '🎾', 'Backhand hit diagonally across the court'),
   {
     id: 'FSlice',
     sports: ALL_SPORTS,
@@ -85,6 +101,7 @@ export const SHOT_TYPES = [
     icon: '🛡️',
     description: 'Forehand volley at the net'
   },
+  tennisVariant('FDVol', 'Forehand Drive Volley', VOLLEY, '🛡️', 'Full-swing forehand hit out of the air'),
   {
     id: 'BVol',
     sports: ALL_SPORTS,
@@ -94,6 +111,27 @@ export const SHOT_TYPES = [
     badgeClass: 'badge-volley',
     icon: '🛡️',
     description: 'Backhand volley at the net'
+  },
+  tennisVariant('BDVol', 'Backhand Drive Volley', VOLLEY, '🛡️', 'Full-swing backhand hit out of the air'),
+  {
+    id: 'H.Volley',
+    sports: ALL_SPORTS,
+    short: 'H.Volley',
+    name: 'Half Volley',
+    category: 'Volley',
+    badgeClass: 'badge-volley',
+    icon: '🦶',
+    description: 'Ball struck just after the bounce, close to the ground'
+  },
+  {
+    id: 'On Rise',
+    sports: ALL_SPORTS,
+    short: 'On Rise',
+    name: 'On the Rise',
+    category: 'Groundstroke',
+    badgeClass: 'badge-ground',
+    icon: '📈',
+    description: 'Ball taken early while it is still rising off the bounce'
   },
   {
     id: 'Band',
@@ -188,3 +226,9 @@ export const SHOT_TYPES = [
     description: 'Hooked overhead with side spin, angled across the court'
   }
 ];
+
+// Serve shots (padel 'Serve' and the tennis serve variants), excluded from rank & shot key
+export function isServeShot(shotId) {
+  const shot = SHOT_TYPES.find(s => s.id === shotId);
+  return !!shot && shot.category === 'Serve';
+}

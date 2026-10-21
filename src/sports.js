@@ -49,7 +49,7 @@ export const SPORTS = {
       { note: 'Unforced', label: 'Unforced' }
     ],
     notePlaceholder: 'Point note (e.g. net cord, long, break pt)...',
-    // Tennis has 10 non-serve shot types (vs 17 in padel), so thresholds are scaled down
+    // Distinct shot types (excluding serves) needed for D+, C- and C/C+
     rankThresholds: { dPlus: 4, cMinus: 6, c: 8 }
   }
 };
@@ -67,16 +67,20 @@ export function isSingles(match) {
   return getSportId(match) === 'tennis' && match.teamFormat === 'singles';
 }
 
-export function getShotTypes(match) {
+// Shots offered for the match's sport. Unless `sportOnly`, shots of the other sport
+// already recorded in this match (e.g. after switching match type) are kept so their stats still show.
+export function getShotTypes(match, { sportOnly = false } = {}) {
   const sport = getSportId(match);
+  const used = sportOnly ? new Set() : new Set(((match && match.points) || []).map(p => p.shot));
   return SHOT_TYPES
-    .filter(s => s.sports.includes(sport))
+    .filter(s => s.sports.includes(sport) || used.has(s.id))
     .map(s => (sport === 'tennis' && s.tennisName ? { ...s, name: s.tennisName } : s));
 }
 
+// Category pills for the record pad (current sport's shots only)
 export function getShotCategories(match) {
   const cats = [];
-  getShotTypes(match).forEach(s => {
+  getShotTypes(match, { sportOnly: true }).forEach(s => {
     if (!cats.includes(s.category)) cats.push(s.category);
   });
   return ['All', ...cats];
