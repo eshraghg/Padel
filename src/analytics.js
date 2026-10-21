@@ -125,7 +125,7 @@ export function calculateMatchStatistics(match, pointsSubset = null) {
     const netTypes = ['FVol', 'BVol', 'FDVol', 'BDVol', 'H.Volley'];
     const overheadTypes = ['Smash', 'Band', 'Baj', 'Vib', 'Rulo', 'Gancho'];
     const baselineTypes = ['F.H', 'B.H', 'FSlice', 'BSlice', 'Lob', 'Drop', 'Chiq.', 'Ret. Serve', 'Serve', 'C.Pared',
-      'F.H DTL', 'F.H CC', 'B.H DTL', 'B.H CC', 'On Rise', 'Kick S.', 'Slice S.', 'Flat S.'];
+      'F.H DL', 'F.H CC', 'B.H DL', 'B.H CC', 'On Rise', 'Kick S.', 'Slice S.', 'Flat S.'];
 
     const scoringTeam = pt.team;
     if (netTypes.includes(shotId)) stats.netShots[scoringTeam]++;

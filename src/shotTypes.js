@@ -57,7 +57,7 @@ export const SHOT_TYPES = [
     icon: '🎾',
     description: 'Forehand baseline drive or stroke'
   },
-  tennisVariant('F.H DTL', 'Forehand Down the Line', GROUND, '🎾', 'Forehand hit parallel to the sideline'),
+  tennisVariant('F.H DL', 'Forehand Down the Line', GROUND, '🎾', 'Forehand hit parallel to the sideline'),
   tennisVariant('F.H CC', 'Forehand Cross Court', GROUND, '🎾', 'Forehand hit diagonally across the court'),
   {
     id: 'B.H',
@@ -69,7 +69,7 @@ export const SHOT_TYPES = [
     icon: '🎾',
     description: 'Backhand baseline drive or stroke'
   },
-  tennisVariant('B.H DTL', 'Backhand Down the Line', GROUND, '🎾', 'Backhand hit parallel to the sideline'),
+  tennisVariant('B.H DL', 'Backhand Down the Line', GROUND, '🎾', 'Backhand hit parallel to the sideline'),
   tennisVariant('B.H CC', 'Backhand Cross Court', GROUND, '🎾', 'Backhand hit diagonally across the court'),
   {
     id: 'FSlice',
