@@ -50,7 +50,7 @@ export const SPORTS = {
     ],
     notePlaceholder: 'Point note (e.g. net cord, long, break pt)...',
     // Distinct shot types (excluding serves) needed for D+, C- and C/C+
-    rankThresholds: { dPlus: 4, cMinus: 6, c: 8 }
+    rankThresholds: { dPlus: 6, cMinus: 9, c: 11 }
   }
 };
 

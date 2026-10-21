@@ -141,7 +141,7 @@ export function calculateMatchStatistics(match, pointsSubset = null) {
  * Based on the number of distinct shot types the player was credited with
  * (a winner or an error), excluding serves (padel 'Serve', tennis Kick / Slice / Flat).
  * Padel (19 types): < 6 D • 6–8 D+ • 9–10 C- • 11+ C / C+
- * Tennis (18 types): < 4 D • 4–5 D+ • 6–7 C- • 8+ C / C+
+ * Tennis (18 types): same thresholds as padel
  * At the top level: C if errors >= winners, otherwise C+ (winners/errors also exclude serves)
  */
 export function getPlayerRank(playerStats, match = null) {
