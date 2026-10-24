@@ -487,6 +487,13 @@ body {
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
 }
 
+.won-by-btn.serve-btn.selected {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: var(--accent-gold);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
+}
+
 /* Player Selection: Left (L) vs Right (R) - Step 3 */
 .player-select-row {
   display: grid;
@@ -1136,6 +1143,26 @@ body {
   padding: 8px 12px;
   border-radius: var(--radius-sm);
   border-left: 3px solid var(--t1-color);
+}
+
+.insight-line {
+  margin-top: 4px;
+}
+
+.insight-details {
+  margin: 2px 0 4px 12px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.insight-details summary {
+  cursor: pointer;
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.insight-details div {
+  margin-top: 2px;
 }
 
 /* SVG Chart Cards */

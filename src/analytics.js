@@ -1,6 +1,7 @@
 // Analytics & Statistical Engine for Padel / Tennis Matches
-import { getSport, getShotTypes, isSingles } from './sports.js';
+import { getSport, getShotTypes, isSingles, getPlayerKeys } from './sports.js';
 import { isServeShot } from './shotTypes.js';
+import { getMatchGamesBreakdown } from './state.js';
 
 export function calculateMatchStatistics(match, pointsSubset = null) {
   const points = pointsSubset !== null ? pointsSubset : (match.points || []);
@@ -164,8 +165,140 @@ export function getPlayerRank(playerStats, match = null) {
   return errors >= winners ? 'C' : 'C+';
 }
 
+// Serve number (1st / 2nd) of a point; points logged before serves were tracked count as 1st serve
+export function getServeNumber(pt) {
+  return pt && pt.serve === 2 ? 2 : 1;
+}
+
+function emptyServeRecord() {
+  return {
+    served: 0,
+    held: 0,
+    heldOn: { 1: 0, 2: 0 }, // held games by the serve of the game-winning point
+    points: { 1: { played: 0, won: 0 }, 2: { played: 0, won: 0 } }, // service points by serve
+    broken: [] // games lost on serve
+  };
+}
+
+/**
+ * Service-game outcomes for the completed (non tie-break) games in scope:
+ * - teams / players: games served & held (split by 1st / 2nd serve on game point), service points won, breaks suffered
+ * - leads: games where a team led 40-0 / 40-15, and how many of them it won
+ * A game is in scope when its final point is in `pointsSubset` (all games when null).
+ */
+export function calculateServeStatistics(match, pointsSubset = null) {
+  const scopeIds = pointsSubset ? new Set(pointsSubset.map(p => p.id)) : null;
+  const games = getMatchGamesBreakdown(match).games.filter(g =>
+    !g.inProgress && !g.isTiebreak && (!scopeIds || scopeIds.has(g.points[g.points.length - 1].id)));
+
+  const teams = { T1: emptyServeRecord(), T2: emptyServeRecord() };
+  const players = {};
+  getPlayerKeys(match).forEach(key => {
+    const teamObj = key.startsWith('T1') ? match.team1 : match.team2;
+    const name = key.endsWith('-R') ? (teamObj.rightPlayer || 'Right') : (teamObj.leftPlayer || 'Left');
+    players[key] = { name, team: key.slice(0, 2), ...emptyServeRecord() };
+  });
+  const emptyLead = () => ({ games: 0, won: 0 });
+  const leads = {
+    T1: { '40-0': emptyLead(), '40-15': emptyLead() },
+    T2: { '40-0': emptyLead(), '40-15': emptyLead() }
+  };
+
+  games.forEach(g => {
+    const records = [teams[g.serverTeam], players[`${g.serverTeam}-${g.serverPlayer}`]].filter(Boolean);
+    const held = g.winnerTeam === g.serverTeam;
+    const gamePointServe = getServeNumber(g.points[g.points.length - 1]);
+
+    records.forEach(r => {
+      r.served++;
+      g.points.forEach(pt => {
+        const n = getServeNumber(pt);
+        r.points[n].played++;
+        if (pt.team === g.serverTeam) r.points[n].won++;
+      });
+      if (held) {
+        r.held++;
+        r.heldOn[gamePointServe]++;
+      } else {
+        r.broken.push({ gameNumber: g.gameNumber, setNumber: g.setNumber, gameInSet: g.gameInSet, serverName: g.serverName });
+      }
+    });
+
+    ['T1', 'T2'].forEach(team => {
+      const opp = team === 'T1' ? 'T2' : 'T1';
+      ['0', '15'].forEach(oppScore => {
+        const reached = g.points.some(pt => pt.gameScoreAfter[team] === '40' && pt.gameScoreAfter[opp] === oppScore);
+        if (!reached) return;
+        const lead = leads[team][`40-${oppScore}`];
+        lead.games++;
+        if (g.winnerTeam === team) lead.won++;
+      });
+    });
+  });
+
+  return { gamesCount: games.length, teams, players, leads };
+}
+
+const pct = (part, total) => (total > 0 ? Math.round((part / total) * 100) : 0);
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+// "held 3/4 (75%)" line plus a collapsible 1st / 2nd serve breakdown
+function describeServiceRecord(label, r) {
+  const holdPct = pct(r.held, r.served);
+  const firstPct = pct(r.heldOn[1], r.served);
+  const secondPct = pct(r.heldOn[2], r.served);
+  const pts = (n) => `${r.points[n].won}/${r.points[n].played} (${pct(r.points[n].won, r.points[n].played)}%)`;
+  return `<div class="insight-line">${label}: won **${r.held}/${r.served}** service games (**${holdPct}%**)` +
+    `<details class="insight-details"><summary>1st vs 2nd serve</summary>` +
+    `<div>${holdPct}% = **${firstPct}%** won on 1st serve (${plural(r.heldOn[1], 'game')}) + **${secondPct}%** won on 2nd serve (${plural(r.heldOn[2], 'game')}), by the serve of the game point</div>` +
+    `<div>Service points won: 1st serve ${pts(1)} • 2nd serve ${pts(2)}</div>` +
+    `</details></div>`;
+}
+
+function serveInsights(serveStats, match) {
+  const insights = [];
+  if (serveStats.gamesCount === 0) return insights;
+  const teamName = (key) => (key === 'T1' ? match.team1.name : match.team2.name);
+  const teamKeys = ['T1', 'T2'].filter(k => serveStats.teams[k].served > 0);
+
+  // Service games won per team
+  insights.push(`🎾 **Service Games Won:**` +
+    teamKeys.map(k => describeServiceRecord(`**${teamName(k)}**`, serveStats.teams[k])).join(''));
+
+  // Service games won per player (singles: same as the team line)
+  if (!isSingles(match)) {
+    const playerLines = Object.values(serveStats.players)
+      .filter(p => p.served > 0)
+      .map(p => describeServiceRecord(`**${p.name}** (${teamName(p.team)})`, p));
+    if (playerLines.length > 0) insights.push(`👤 **Service Games Won by Player:**` + playerLines.join(''));
+  }
+
+  // Service breaks suffered and who was serving
+  const breakLines = teamKeys.map(k => {
+    const broken = serveStats.teams[k].broken;
+    if (broken.length === 0) return `<div class="insight-line">**${teamName(k)}** was never broken (${plural(serveStats.teams[k].served, 'service game')}).</div>`;
+    const servers = broken.map(b => `${b.serverName} (Set ${b.setNumber}, Game ${b.gameInSet})`).join(', ');
+    return `<div class="insight-line">**${teamName(k)}** was broken **${broken.length}** time${broken.length === 1 ? '' : 's'} — server${broken.length === 1 ? '' : 's'}: ${servers}</div>`;
+  });
+  insights.push(`⚡ **Service Breaks:**` + breakLines.join(''));
+
+  // Closing out games from 40-0 / 40-15
+  const leadLines = ['T1', 'T2'].map(k => {
+    const parts = ['40-0', '40-15'].map(score => {
+      const l = serveStats.leads[k][score];
+      if (l.games === 0) return `${score}: —`;
+      return `${score}: ${plural(l.games, 'game')}, won **${pct(l.won, l.games)}%** / lost **${pct(l.games - l.won, l.games)}%**`;
+    });
+    return `<div class="insight-line">**${teamName(k)}** — ${parts.join(' • ')}</div>`;
+  });
+  insights.push(`🔒 **Leading 40-0 / 40-15:**` + leadLines.join(''));
+
+  return insights;
+}
+
 // Generate Coach & Tactical Insights (Context-aware for Game / Period Filters)
-export function generateTacticalInsights(stats, match, filterContext = null) {
+// `points` is the scope the stats were computed from (all match points when null)
+export function generateTacticalInsights(stats, match, filterContext = null, points = null) {
   const insights = [];
 
   if (stats.totalPoints === 0) {
@@ -252,6 +385,9 @@ export function generateTacticalInsights(stats, match, filterContext = null) {
     const netLeader = netT1 >= netT2 ? match.team1.name : match.team2.name;
     insights.push(`⚡ **Net Control:** ${netLeader} won more points at the volley (${Math.max(netT1, netT2)} vs ${Math.min(netT1, netT2)}).`);
   }
+
+  // 7. Serve: service games won, breaks, closing out from 40-0 / 40-15
+  insights.push(...serveInsights(calculateServeStatistics(match, points), match));
 
   return insights;
 }

@@ -6,7 +6,7 @@
  * @param {string[]} opts.labels - axis labels (shot types)
  * @param {number[]} opts.values - count per axis
  * @param {string} opts.color - series color
- * @param {number} [opts.maxValue] - shared scale max (so charts are comparable)
+ * @param {number} [opts.maxValue] - fixed scale max; by default the chart scales to its own largest value
  * @param {string} [opts.seriesLabel] - used in hover tooltips (e.g. "Winners")
  */
 export function renderRadarChartSvg({ labels, values, color, maxValue = null, seriesLabel = '' }) {
@@ -16,9 +16,10 @@ export function renderRadarChartSvg({ labels, values, color, maxValue = null, se
   const radius = 92;
   const n = labels.length;
   const rawMax = Math.max(1, maxValue ?? Math.max(...values, 0));
-  // Whole-number ring steps: one ring per shot up to 5, otherwise 4 rings
-  const step = rawMax <= 5 ? 1 : Math.ceil(rawMax / 4);
-  const levels = rawMax <= 5 ? rawMax : 4;
+  // Whole-number "nice" ring step (1, 2, 5, 10, 20, 50...) giving at most 5 rings,
+  // so the outer ring sits just above the chart's largest value
+  const step = niceStep(rawMax);
+  const levels = Math.ceil(rawMax / step);
   const max = step * levels;
 
   const point = (i, r) => {
@@ -69,6 +70,14 @@ export function renderRadarChartSvg({ labels, values, color, maxValue = null, se
 
   svg += '</svg>';
   return svg;
+}
+
+function niceStep(rawMax, maxRings = 5) {
+  for (let base = 1; ; base *= 10) {
+    for (const m of [1, 2, 5]) {
+      if (rawMax / (base * m) <= maxRings) return base * m;
+    }
+  }
 }
 
 /**

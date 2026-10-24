@@ -134,6 +134,18 @@
         </div>
       </section>
 
+      <!-- Serve: 1st or 2nd serve of the point (after a fault the server serves again) -->
+      <section class="entry-section">
+        <div class="section-label">
+          <span>🎾 Serve</span>
+          <span class="step-indicator">1st / 2nd</span>
+        </div>
+        <div class="won-by-row">
+          <button type="button" class="won-by-btn serve-btn selected" id="btn-serve-1">1st Serve</button>
+          <button type="button" class="won-by-btn serve-btn" id="btn-serve-2">2nd Serve</button>
+        </div>
+      </section>
+
       <!-- Step 3: Player Selection (Left vs Right player with name) -->
       <section class="entry-section" id="player-select-section">
         <div class="section-label">
@@ -729,6 +741,15 @@
             <button type="button" class="won-by-btn error-btn" id="edit-won-e" style="padding:10px;">
               <span>⚠️</span> Error (E)
             </button>
+          </div>
+        </div>
+
+        <!-- Serve -->
+        <div class="form-group">
+          <label class="form-label">Serve</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button type="button" class="won-by-btn serve-btn" id="edit-serve-1" style="padding:10px;">1st Serve</button>
+            <button type="button" class="won-by-btn serve-btn" id="edit-serve-2" style="padding:10px;">2nd Serve</button>
           </div>
         </div>
 

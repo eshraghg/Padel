@@ -24,7 +24,7 @@ import {
   getScoringRuleLabel,
   getPointPlayerName
 } from './state.js';
-import { calculateMatchStatistics, generateTacticalInsights, getPlayerRank, countOverheadWinners } from './analytics.js';
+import { calculateMatchStatistics, generateTacticalInsights, getPlayerRank, countOverheadWinners, getServeNumber } from './analytics.js';
 import { renderRadarChartSvg, buildPlayerRadarData } from './radarChart.js';
 import { playPointSound, toggleSound, isSoundEnabled } from './audio.js';
 import { exportSessionToHtml } from './exportHtml.js';
@@ -47,6 +47,7 @@ let pendingPoint = {
   wonBy: 'W',
   player: 'L',
   shot: 'Ret. Serve', // Default to Return of Serve
+  serve: 1, // 1st or 2nd serve of the point
   note: ''
 };
 
@@ -86,6 +87,8 @@ const elements = {
   btnWonE: document.getElementById('btn-won-e'),
   playerSection: document.getElementById('player-select-section'),
   playerHeading: document.getElementById('player-select-heading'),
+  btnServe1: document.getElementById('btn-serve-1'),
+  btnServe2: document.getElementById('btn-serve-2'),
   btnPlayerL: document.getElementById('btn-player-l'),
   btnPlayerR: document.getElementById('btn-player-r'),
   recPlayerLName: document.getElementById('rec-player-l-name'),
@@ -190,6 +193,8 @@ const elements = {
   editT2NameLbl: document.getElementById('edit-t2-name-lbl'),
   editWonW: document.getElementById('edit-won-w'),
   editWonE: document.getElementById('edit-won-e'),
+  editServe1: document.getElementById('edit-serve-1'),
+  editServe2: document.getElementById('edit-serve-2'),
   editPlayerGroup: document.getElementById('edit-player-group'),
   editPlayerHeading: document.getElementById('edit-player-heading'),
   editPlayerL: document.getElementById('edit-player-l'),
@@ -207,6 +212,7 @@ let editingPoint = {
   wonBy: 'W',
   player: 'L',
   shot: 'Ret. Serve',
+  serve: 1,
   note: ''
 };
 
@@ -650,6 +656,18 @@ function setupEventListeners() {
     updateRecordPad();
   });
 
+  // Record Pad: 1st / 2nd Serve
+  elements.btnServe1.addEventListener('click', () => {
+    pendingPoint.serve = 1;
+    playPointSound('click');
+    updateRecordPad();
+  });
+  elements.btnServe2.addEventListener('click', () => {
+    pendingPoint.serve = 2;
+    playPointSound('click');
+    updateRecordPad();
+  });
+
   // Record Pad: Player Select
   elements.btnPlayerL.addEventListener('click', () => {
     pendingPoint.player = 'L';
@@ -772,6 +790,16 @@ function setupEventListeners() {
     playPointSound('click');
     updateEditModalUI();
   });
+  elements.editServe1.addEventListener('click', () => {
+    editingPoint.serve = 1;
+    playPointSound('click');
+    updateEditModalUI();
+  });
+  elements.editServe2.addEventListener('click', () => {
+    editingPoint.serve = 2;
+    playPointSound('click');
+    updateEditModalUI();
+  });
   elements.editPlayerL.addEventListener('click', () => {
     editingPoint.player = 'L';
     playPointSound('click');
@@ -803,6 +831,7 @@ function setupEventListeners() {
       currentMatch.points[idx].wonBy = editingPoint.wonBy;
       currentMatch.points[idx].player = editingPoint.player;
       currentMatch.points[idx].shot = editingPoint.shot;
+      currentMatch.points[idx].serve = editingPoint.serve;
       currentMatch.points[idx].note = elements.editNoteInput.value.trim();
 
       saveCurrentMatch(currentMatch);
@@ -840,6 +869,9 @@ function updateEditModalUI() {
   elements.editWonW.classList.toggle('selected', editingPoint.wonBy === 'W');
   elements.editWonE.classList.toggle('selected', editingPoint.wonBy === 'E');
 
+  elements.editServe1.classList.toggle('selected', editingPoint.serve !== 2);
+  elements.editServe2.classList.toggle('selected', editingPoint.serve === 2);
+
   let targetTeam = editingPoint.team === 'T1' ? t1 : t2;
   if (editingPoint.wonBy === 'E') {
     targetTeam = editingPoint.team === 'T1' ? t2 : t1;
@@ -873,6 +905,7 @@ function openEditPointModal(idx) {
     wonBy: pt.wonBy,
     player: pt.player,
     shot: pt.shot,
+    serve: getServeNumber(pt),
     note: pt.note || ''
   };
 
@@ -1067,6 +1100,10 @@ function updateRecordPad() {
   elements.btnWonW.classList.toggle('selected', pendingPoint.wonBy === 'W');
   elements.btnWonE.classList.toggle('selected', pendingPoint.wonBy === 'E');
 
+  // Serve buttons
+  elements.btnServe1.classList.toggle('selected', pendingPoint.serve !== 2);
+  elements.btnServe2.classList.toggle('selected', pendingPoint.serve === 2);
+
   // Player Selection (Step 3) — not needed in singles, the side's only player is credited
   elements.playerSection.style.display = singles ? 'none' : '';
   if (singles) pendingPoint.player = 'L';
@@ -1174,6 +1211,7 @@ function handleLogPoint() {
     wonBy: pendingPoint.wonBy,
     player: pendingPoint.player,
     shot: pendingPoint.shot,
+    serve: pendingPoint.serve,
     note: pendingPoint.note ? pendingPoint.note.trim() : '',
     timestamp: Date.now()
   };
@@ -1199,6 +1237,7 @@ function handleLogPoint() {
 
   elements.pointNoteInput.value = '';
   pendingPoint.note = '';
+  pendingPoint.serve = 1; // Each new point starts on the 1st serve
 
   updateUI();
 }
@@ -1276,7 +1315,7 @@ function renderScoresheetTable(pointsToRender = null, filterContext = null) {
         </div>
       </td>
       <td style="font-size:0.75rem; font-weight:700; color:var(--accent-gold); white-space:nowrap;">
-        🎾 ${annPt.serverName || '-'}
+        🎾 ${annPt.serverName || '-'}${getServeNumber(pt) === 2 ? ' <span style="color:#94a3b8;">(2nd)</span>' : ''}
       </td>
       <td>
         <span class="team-badge-cell ${isT1 ? 't1' : 't2'}">${pt.team}</span>
@@ -1527,7 +1566,7 @@ function renderAnalyticsView(pointsToRender = null, filterContext = null) {
   elements.kpiOverheadsVal.textContent = countOverheadWinners(stats, currentMatch);
 
   // 2. Context-Aware Tactical Insights
-  const insights = generateTacticalInsights(stats, currentMatch, ctx);
+  const insights = generateTacticalInsights(stats, currentMatch, ctx, points);
   elements.insightsList.innerHTML = '';
   insights.forEach(ins => {
     const div = document.createElement('div');
@@ -1603,7 +1642,7 @@ function renderPlayerComparisonCards(stats) {
 
 function renderPlayerRadarCharts(stats) {
   if (!elements.playerRadarGrid) return;
-  const { players, labels, maxValue } = buildPlayerRadarData(stats, getShotTypes(currentMatch), getPlayerKeys(currentMatch));
+  const { players, labels } = buildPlayerRadarData(stats, getShotTypes(currentMatch), getPlayerKeys(currentMatch));
   const singles = isSingles(currentMatch);
 
   elements.playerRadarGrid.innerHTML = players.map(p => {
@@ -1620,11 +1659,11 @@ function renderPlayerRadarCharts(stats) {
         <div class="player-radar-pair">
           <div>
             <div class="player-radar-label" style="color:#10b981;">Winners (${winnersTotal})</div>
-            ${renderRadarChartSvg({ labels, values: p.winners, color: '#10b981', maxValue, seriesLabel: 'Winners' })}
+            ${renderRadarChartSvg({ labels, values: p.winners, color: '#10b981', seriesLabel: 'Winners' })}
           </div>
           <div>
             <div class="player-radar-label" style="color:#ef4444;">Errors (${errorsTotal})</div>
-            ${renderRadarChartSvg({ labels, values: p.errors, color: '#ef4444', maxValue, seriesLabel: 'Errors' })}
+            ${renderRadarChartSvg({ labels, values: p.errors, color: '#ef4444', seriesLabel: 'Errors' })}
           </div>
         </div>
       </div>

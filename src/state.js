@@ -619,18 +619,18 @@ export function createDemoMatch() {
     { team: 'T1', wonBy: 'W', player: 'L', shot: 'Band', note: 'Bandeja forcing weak reply' },
     { team: 'T2', wonBy: 'W', player: 'R', shot: 'Drop', note: 'Disguised backhand dropshot' },
     { team: 'T1', wonBy: 'W', player: 'L', shot: 'FVol', note: 'Fast volley exchange won' },
-    { team: 'T1', wonBy: 'W', player: 'R', shot: 'Smash', note: 'Lebrón overhead smash finish' },
+    { team: 'T1', wonBy: 'W', player: 'R', shot: 'Smash', note: 'Lebrón overhead smash finish', serve: 2 },
 
     // Game 4: T2 serves (Arturo Coello R) -> T1 BREAKS! (3-1)
     { team: 'T1', wonBy: 'W', player: 'L', shot: 'Ret. Serve', note: 'Return winner off Coello serve' },
     { team: 'T1', wonBy: 'W', player: 'R', shot: 'BVol', note: 'Crisp backhand volley to fence' },
     { team: 'T2', wonBy: 'W', player: 'R', shot: 'Smash', note: 'Coello left-handed smash' },
     { team: 'T1', wonBy: 'W', player: 'L', shot: 'Chiq.', note: 'Precision chiquita dipping low' },
-    { team: 'T1', wonBy: 'W', player: 'R', shot: 'Smash', note: 'Lebrón break point conversion' },
+    { team: 'T1', wonBy: 'W', player: 'R', shot: 'Smash', note: 'Lebrón break point conversion', serve: 2 },
 
     // Game 5: T1 serves (Ale Galán L) -> T2 BREAKS BACK! (3-2)
     { team: 'T2', wonBy: 'W', player: 'L', shot: 'Baj', note: 'Tapia lightning bajada' },
-    { team: 'T2', wonBy: 'W', player: 'R', shot: 'Ret. Serve', note: 'Coello blistering return winner' },
+    { team: 'T2', wonBy: 'W', player: 'R', shot: 'Ret. Serve', note: 'Coello blistering return winner', serve: 2 },
     { team: 'T1', wonBy: 'W', player: 'L', shot: 'Band', note: 'Galán low bandeja to corner' },
     { team: 'T2', wonBy: 'W', player: 'L', shot: 'Chiq.', note: 'Tapia drop chiquita' },
     { team: 'T2', wonBy: 'W', player: 'R', shot: 'Drop', note: 'Coello drop volley break' },
@@ -650,13 +650,13 @@ export function createDemoMatch() {
     { team: 'T2', wonBy: 'W', player: 'R', shot: 'Baj', note: 'Coello heavy bajada' },
     { team: 'T1', wonBy: 'W', player: 'L', shot: 'FVol', note: 'Galán stop volley' },
     { team: 'T2', wonBy: 'W', player: 'L', shot: 'Chiq.', note: 'Tapia chiquita to feet' },
-    { team: 'T2', wonBy: 'W', player: 'R', shot: 'Drop', note: 'Coello dropshot breaks to make it 4-3!' },
+    { team: 'T2', wonBy: 'W', player: 'R', shot: 'Drop', note: 'Coello dropshot breaks to make it 4-3!', serve: 2 },
 
     // Game 8: T2 serves (Arturo Coello R) -> T1 BREAKS! (5-3)
     { team: 'T1', wonBy: 'W', player: 'L', shot: 'Ret. Serve', note: 'Galán sharp return' },
     { team: 'T1', wonBy: 'W', player: 'R', shot: 'Band', note: 'Lebrón bandeja to back glass' },
     { team: 'T2', wonBy: 'W', player: 'R', shot: 'Smash', note: 'Coello kick smash' },
-    { team: 'T1', wonBy: 'W', player: 'L', shot: 'Baj', note: 'Galán bajada winner down line' },
+    { team: 'T1', wonBy: 'W', player: 'L', shot: 'Baj', note: 'Galán bajada winner down line', serve: 2 },
     { team: 'T1', wonBy: 'W', player: 'R', shot: 'FVol', note: 'Lebrón volley winner to lead 5-3' },
 
     // Game 9: T1 serves (Ale Galán L) -> T2 BREAKS! (5-4)
@@ -681,6 +681,7 @@ export function createDemoMatch() {
     wonBy: p.wonBy,
     player: p.player,
     shot: p.shot,
+    serve: p.serve || 1,
     note: p.note,
     timestamp: Date.now() - (demoShots.length - idx) * 45000
   }));

@@ -29,7 +29,7 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
   const activePoints = filteredPoints !== null ? filteredPoints : (match.points || []);
   const scoreState = computeMatchScore(match);
   const stats = calculateMatchStatistics(match, activePoints);
-  const insights = generateTacticalInsights(stats, match, filterContext);
+  const insights = generateTacticalInsights(stats, match, filterContext, activePoints);
   const shotTypes = getShotTypes(match);
   const shotIds = shotTypes.map(s => s.id);
   const sport = getSport(match);
@@ -212,11 +212,11 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
         <div class="radar-pair">
           <div>
             <div class="radar-label color-winner">Winners (${winnersTotal})</div>
-            ${renderRadarChartSvg({ labels: radarData.labels, values: p.winners, color: '#10b981', maxValue: radarData.maxValue, seriesLabel: 'Winners' })}
+            ${renderRadarChartSvg({ labels: radarData.labels, values: p.winners, color: '#10b981', seriesLabel: 'Winners' })}
           </div>
           <div>
             <div class="radar-label color-error">Errors (${errorsTotal})</div>
-            ${renderRadarChartSvg({ labels: radarData.labels, values: p.errors, color: '#ef4444', maxValue: radarData.maxValue, seriesLabel: 'Errors' })}
+            ${renderRadarChartSvg({ labels: radarData.labels, values: p.errors, color: '#ef4444', seriesLabel: 'Errors' })}
           </div>
         </div>
       </div>
@@ -298,6 +298,9 @@ export function exportSessionToHtml(match, filteredPoints = null, filterContext 
 
     /* Insights */
     .insight-item { background: rgba(255,255,255,0.03); border-left: 3px solid var(--t1); padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; font-size: 0.85rem; }
+    .insight-line { margin-top: 4px; }
+    .insight-details { margin: 2px 0 4px 12px; font-size: 0.78rem; color: var(--muted); }
+    .insight-details summary { cursor: pointer; color: var(--gold); font-weight: 700; }
 
     /* Player Comp */
     .player-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
